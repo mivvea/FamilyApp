@@ -4,6 +4,6 @@
   "private": true,
   "homepage": "https://mivvea.github.io/FamilyApp/",
   "scripts": {
-    "build": "rm -rf dist && mkdir -p dist && cp index.html dist/index.html && cp src/main.js dist/main.js && cp src/App.css dist/styles.css"
+    "build": "rm -rf dist && mkdir -p dist && cp index.html dist/index.html && cp -r src dist/src"
   }
 }
