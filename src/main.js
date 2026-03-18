@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://mivvea.runasp.net';
+const API_BASE_URL = 'http://mivvea.runasp.net';
 const endpoints = {
   login: '/User/login',
   register: '/User/register',
