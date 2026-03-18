@@ -1,6 +1,6 @@
 # FamilyApp
 
-FamilyApp is a GitHub Pages frontend for the public FamilyApi backend.
+FamilyApp is a GitHub Pages frontend for the public FamilyApi backend. why
 
 ## Stack
 - HTML + CSS + Vanilla JavaScript
