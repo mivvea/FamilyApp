@@ -1,0 +1,30 @@
+.App {
+  text-align: center;
+}
+
+nav {
+  background: #f0f0f0;
+  padding: 10px;
+}
+
+nav ul {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+nav ul li {
+  margin: 0 10px;
+}
+
+button {
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+input {
+  padding: 5px;
+  margin: 5px;
+}
