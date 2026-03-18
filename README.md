@@ -1,21 +1,25 @@
 # FamilyApp
 
-A React-based frontend for the FamilyApi backend. This app allows users to register, login, and manage dishes and movies.
+FamilyApp to statyczny frontend hostowany na GitHub Pages i komunikujący się z backendem FamilyApi.
 
-## Features
-- User registration and login
-- Add, view, and manage dishes
-- Add, view, and manage movies
+## Stack
+- HTML + CSS + Vanilla JavaScript
+- Hash routing kompatybilny z GitHub Pages
+- Fetch API do komunikacji z backendem
 
-## Backend
-This app connects to the backend hosted at [http://mivvea.runasp.net](http://mivvea.runasp.net).
+## Build
+1. `npm install`
+2. `npm run build`
 
-## Setup
-1. Clone this repository
-2. Install dependencies: `npm install`
-3. Start the app: `npm start`
+Wynik builda trafia do katalogu `dist/`.
 
-## Hosting
-This app is hosted on GitHub Pages.
+## Deployment
+Repo jest skonfigurowane pod GitHub Pages przez GitHub Actions. Aby publikacja zadziałała, w ustawieniach repozytorium ustaw:
+- **Settings → Pages → Source = GitHub Actions**
 
-## Updated for GitHub Pages Deployment
+Domyślny adres aplikacji:
+- `https://mivvea.github.io/FamilyApp/`
+
+## API
+Frontend korzysta z:
+- `https://mivvea.runasp.net/api`
