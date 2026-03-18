@@ -10,10 +10,34 @@ const endpoints = {
 
 const app = document.querySelector('#app');
 
+function readStorage(key) {
+  try {
+    return window.localStorage.getItem(key) || '';
+  } catch {
+    return '';
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures and keep the UI usable.
+  }
+}
+
+function removeStorage(key) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures and keep the UI usable.
+  }
+}
+
 const state = {
   route: window.location.hash.replace(/^#/, '') || '/',
-  name: localStorage.getItem('familyapp.name') || '',
-  authToken: localStorage.getItem('familyapp.authToken') || '',
+  name: readStorage('familyapp.name'),
+  authToken: readStorage('familyapp.authToken'),
   dishes: [],
   myDishes: [],
   movies: [],
@@ -91,11 +115,11 @@ function persistSession(token, name) {
   state.name = name || '';
 
   if (token) {
-    localStorage.setItem('familyapp.authToken', token);
-    localStorage.setItem('familyapp.name', name || '');
+    writeStorage('familyapp.authToken', token);
+    writeStorage('familyapp.name', name || '');
   } else {
-    localStorage.removeItem('familyapp.authToken');
-    localStorage.removeItem('familyapp.name');
+    removeStorage('familyapp.authToken');
+    removeStorage('familyapp.name');
   }
 }
 
@@ -455,5 +479,33 @@ function escapeAttribute(value) {
   return escapeHtml(value);
 }
 
-refreshProtectedData();
-render();
+function renderFatalError(message) {
+  if (!app) {
+    return;
+  }
+
+  app.innerHTML = `
+    <div class="app-shell">
+      <section class="panel">
+        <span class="badge">Startup error</span>
+        <h1>FamilyApp could not start</h1>
+        <p class="message error">${escapeHtml(message)}</p>
+      </section>
+    </div>
+  `;
+}
+
+function bootstrap() {
+  if (!app) {
+    throw new Error('The #app container is missing from index.html.');
+  }
+
+  refreshProtectedData();
+  render();
+}
+
+try {
+  bootstrap();
+} catch (error) {
+  renderFatalError(error instanceof Error ? error.message : String(error));
+}
