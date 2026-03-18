@@ -1,15 +1,27 @@
-const API_BASE_URL = 'https://mivvea.runasp.net/api';
+const API_BASE_URL = 'https://mivvea.runasp.net';
+const endpoints = {
+  login: '/User/login',
+  register: '/User/register',
+  dishes: '/Dishes',
+  myDishes: '/Dishes/MyDishes',
+  movies: '/Movies',
+  myMovies: '/Movies/MyMovies',
+};
+
 const app = document.querySelector('#app');
 
 const state = {
   route: window.location.hash.replace(/^#/, '') || '/',
-  isLoggedIn: false,
-  username: '',
+  name: localStorage.getItem('familyapp.name') || '',
+  authToken: localStorage.getItem('familyapp.authToken') || '',
   dishes: [],
+  myDishes: [],
   movies: [],
+  myMovies: [],
   dishesStatus: '',
   moviesStatus: '',
   authStatus: '',
+  apiStatus: '',
 };
 
 const routes = {
@@ -18,6 +30,15 @@ const routes = {
   '/dishes': renderDishes,
   '/movies': renderMovies,
 };
+
+function isSignedIn() {
+  return Boolean(state.authToken);
+}
+
+function setStatus(key, message) {
+  state[key] = message;
+  render();
+}
 
 function navigate(route) {
   window.location.hash = route;
@@ -28,47 +49,106 @@ window.addEventListener('hashchange', () => {
   render();
 });
 
+function getHeaders(extraHeaders = {}) {
+  return {
+    'Content-Type': 'application/json',
+    ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {}),
+    ...extraHeaders,
+  };
+}
+
 async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
+    headers: getHeaders(options.headers),
     ...options,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `HTTP ${response.status}`);
-  }
-
   const text = await response.text();
-  return text ? JSON.parse(text) : null;
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+      (typeof data === 'object' && (data?.Message || data?.message || data?.title || data?.error)) ||
+      (typeof data === 'string' && data) ||
+      `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  state.apiStatus = `Connected to ${path}`;
+  return data;
 }
 
-async function loadDishes() {
-  state.dishesStatus = 'Ładowanie dań...';
-  render();
-  try {
-    const dishes = await apiRequest('/dishes');
-    state.dishes = Array.isArray(dishes) ? dishes : [];
-    state.dishesStatus = '';
-  } catch (error) {
-    state.dishesStatus = `Błąd pobierania dań: ${error.message}`;
+function persistSession(token, name) {
+  state.authToken = token || '';
+  state.name = name || '';
+
+  if (token) {
+    localStorage.setItem('familyapp.authToken', token);
+    localStorage.setItem('familyapp.name', name || '');
+  } else {
+    localStorage.removeItem('familyapp.authToken');
+    localStorage.removeItem('familyapp.name');
   }
-  render();
 }
 
-async function loadMovies() {
-  state.moviesStatus = 'Ładowanie filmów...';
-  render();
-  try {
-    const movies = await apiRequest('/movies');
-    state.movies = Array.isArray(movies) ? movies : [];
-    state.moviesStatus = '';
-  } catch (error) {
-    state.moviesStatus = `Błąd pobierania filmów: ${error.message}`;
+function normalizeCollection(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
   }
+
+  if (Array.isArray(payload?.items)) {
+    return payload.items;
+  }
+
+  if (Array.isArray(payload?.$values)) {
+    return payload.$values;
+  }
+
+  return [];
+}
+
+async function refreshProtectedData() {
+  if (!isSignedIn()) {
+    state.dishes = [];
+    state.myDishes = [];
+    state.movies = [];
+    state.myMovies = [];
+    state.dishesStatus = 'Sign in to load dishes.';
+    state.moviesStatus = 'Sign in to load movies.';
+    render();
+    return;
+  }
+
+  setStatus('dishesStatus', 'Loading dishes...');
+  setStatus('moviesStatus', 'Loading movies...');
+
+  try {
+    const [dishes, myDishes, movies, myMovies] = await Promise.all([
+      apiRequest(endpoints.dishes),
+      apiRequest(endpoints.myDishes).catch((error) => ({ error: error.message })),
+      apiRequest(endpoints.movies),
+      apiRequest(endpoints.myMovies).catch((error) => ({ error: error.message })),
+    ]);
+
+    state.dishes = normalizeCollection(dishes);
+    state.myDishes = normalizeCollection(myDishes);
+    state.movies = normalizeCollection(movies);
+    state.myMovies = normalizeCollection(myMovies);
+    state.dishesStatus = myDishes?.error ? `All dishes loaded. My dishes: ${myDishes.error}` : '';
+    state.moviesStatus = myMovies?.error ? `All movies loaded. My movies: ${myMovies.error}` : '';
+  } catch (error) {
+    state.dishesStatus = `Unable to load dishes. ${error.message}`;
+    state.moviesStatus = `Unable to load movies. ${error.message}`;
+  }
+
   render();
 }
 
@@ -85,7 +165,7 @@ function pageTemplate(content) {
             <li><a class="${state.route === '/login' ? 'active' : ''}" href="#/login">Login</a></li>
           </ul>
         </nav>
-        ${state.isLoggedIn ? '<button class="button ghost" data-action="logout">Logout</button>' : ''}
+        ${isSignedIn() ? '<button class="button ghost" data-action="logout">Logout</button>' : ''}
       </header>
       <main class="page-content">${content}</main>
     </div>
@@ -95,18 +175,22 @@ function pageTemplate(content) {
 function renderHome() {
   return pageTemplate(`
     <section class="panel hero">
-      <span class="badge">GitHub Pages ready</span>
-      <h1>FamilyApp działa jako statyczny frontend dla FamilyApi.</h1>
+      <span class="badge">FamilyApi connected</span>
+      <h1>FamilyApp now matches the actual controller routes in FamilyApi.</h1>
       <p>
-        Aplikacja używa hash routingu, więc działa poprawnie na GitHub Pages bez dodatkowej konfiguracji serwera.
+        The frontend uses <code>/User/login</code>, <code>/User/register</code>, <code>/Dishes</code>, <code>/Dishes/MyDishes</code>, <code>/Movies</code>, and <code>/Movies/MyMovies</code>.
       </p>
       <div class="status-row">
         <strong>Status:</strong>
-        <span>${state.isLoggedIn ? `Zalogowano jako ${state.username}` : 'Niezalogowany użytkownik'}</span>
+        <span>${isSignedIn() ? `Signed in as ${state.name}` : 'Not signed in'}</span>
+      </div>
+      <div class="status-row diagnostic-row">
+        <strong>API:</strong>
+        <span>${state.apiStatus || 'Waiting for the first successful API request...'}</span>
       </div>
       <div class="cta-row">
-        <a class="button primary" href="#/dishes">Przejdź do dań</a>
-        <a class="button secondary" href="#/movies">Przejdź do filmów</a>
+        <a class="button primary" href="#/dishes">Open dishes</a>
+        <a class="button secondary" href="#/movies">Open movies</a>
       </div>
     </section>
   `);
@@ -115,28 +199,39 @@ function renderHome() {
 function renderLogin() {
   return pageTemplate(`
     <section class="panel auth-panel">
-      <h2>Logowanie lub rejestracja</h2>
-      <p class="muted">Tryb GitHub Pages nie potrzebuje serwerowego routingu — wszystko działa w jednej statycznej aplikacji.</p>
+      <h2>Login or register</h2>
+      <p class="muted">FamilyApi expects a JSON body with <code>name</code> and <code>password</code>.</p>
       <form class="stack" id="auth-form">
         <label>
-          Login
-          <input name="username" type="text" placeholder="Username" required />
+          Name
+          <input name="name" type="text" placeholder="Your name" value="${escapeAttribute(state.name)}" required />
         </label>
         <label>
-          Hasło
+          Password
           <input name="password" type="password" placeholder="Password" required />
         </label>
         <div class="cta-row">
-          <button class="button primary" type="submit" name="mode" value="login">Zaloguj</button>
-          <button class="button secondary" type="submit" name="mode" value="register">Zarejestruj</button>
+          <button class="button primary" type="submit" name="mode" value="login">Login</button>
+          <button class="button secondary" type="submit" name="mode" value="register">Register</button>
         </div>
       </form>
-      ${state.authStatus ? `<p class="message ${state.authStatus.startsWith('Błąd') ? 'error' : 'success'}">${state.authStatus}</p>` : ''}
+      ${state.authStatus ? `<p class="message ${state.authStatus.startsWith('Unable') ? 'error' : 'success'}">${state.authStatus}</p>` : ''}
     </section>
   `);
 }
 
-function renderCollectionPage(title, badge, items, status, inputPlaceholder, actionName) {
+function renderCollectionPage({
+  title,
+  badge,
+  items,
+  myItems,
+  status,
+  itemField,
+  imageField,
+  itemPlaceholder,
+  imagePlaceholder,
+  action,
+}) {
   return pageTemplate(`
     <section class="panel">
       <div class="section-heading">
@@ -144,37 +239,99 @@ function renderCollectionPage(title, badge, items, status, inputPlaceholder, act
           <span class="badge">${badge}</span>
           <h2>${title}</h2>
         </div>
-        <p class="muted">${state.isLoggedIn ? 'Możesz dodawać nowe pozycje.' : 'Zaloguj się, aby dodawać nowe pozycje.'}</p>
+        <p class="muted">${isSignedIn() ? 'The backend requires a valid JWT for all list endpoints.' : 'Sign in first because these endpoints are protected by JWT auth.'}</p>
       </div>
 
-      ${status ? `<p class="message ${status.startsWith('Błąd') ? 'error' : 'loading'}">${status}</p>` : ''}
+      ${status ? `<p class="message ${status.startsWith('Unable') ? 'error' : 'loading'}">${status}</p>` : ''}
 
-      <ul class="card-list">
-        ${items.map((item) => `<li class="card-item">${item.name}</li>`).join('') || '<li class="card-item">Brak danych.</li>'}
-      </ul>
+      <section class="subsection">
+        <h3>All items</h3>
+        ${renderCards(items, itemField, imageField, 'No items returned yet.')}
+      </section>
 
-      <div class="inline-form">
-        <input id="new-item-name" type="text" placeholder="${inputPlaceholder}" ${state.isLoggedIn ? '' : 'disabled'} />
-        <button class="button primary" type="button" data-action="${actionName}" ${state.isLoggedIn ? '' : 'disabled'}>Dodaj</button>
+      <section class="subsection">
+        <h3>My items</h3>
+        ${renderCards(myItems, itemField, imageField, 'No personal items returned yet.')}
+      </section>
+
+      <div class="stack compact">
+        <label>
+          ${title === 'Dishes' ? 'Dish name' : 'Movie title'}
+          <input id="item-name" type="text" placeholder="${itemPlaceholder}" ${isSignedIn() ? '' : 'disabled'} />
+        </label>
+        <label>
+          ${title === 'Dishes' ? 'Photo URL' : 'Poster URL'}
+          <input id="item-image" type="url" placeholder="${imagePlaceholder}" ${isSignedIn() ? '' : 'disabled'} />
+        </label>
+        <button class="button primary" type="button" data-action="${action}" ${isSignedIn() ? '' : 'disabled'}>Add</button>
       </div>
     </section>
   `);
 }
 
+function renderCards(items, itemField, imageField, emptyText) {
+  if (!items.length) {
+    return `<ul class="card-list"><li class="card-item">${emptyText}</li></ul>`;
+  }
+
+  return `
+    <ul class="card-list">
+      ${items
+        .map((item) => {
+          const title = item[itemField] || 'Untitled';
+          const image = item[imageField];
+          const addedBy = item.addedBy ? `<p class="card-meta">Added by ${item.addedBy}</p>` : '';
+          return `
+            <li class="card-item media-card">
+              ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(title)}" />` : ''}
+              <div>
+                <strong>${escapeHtml(title)}</strong>
+                ${addedBy}
+              </div>
+            </li>
+          `;
+        })
+        .join('')}
+    </ul>
+  `;
+}
+
 function renderDishes() {
-  return renderCollectionPage('Dania', 'Family menu', state.dishes, state.dishesStatus, 'Nowe danie', 'add-dish');
+  return renderCollectionPage({
+    title: 'Dishes',
+    badge: 'Family menu',
+    items: state.dishes,
+    myItems: state.myDishes,
+    status: state.dishesStatus,
+    itemField: 'name',
+    imageField: 'photo',
+    itemPlaceholder: 'Homemade pizza',
+    imagePlaceholder: 'https://example.com/dish.jpg',
+    action: 'add-dish',
+  });
 }
 
 function renderMovies() {
-  return renderCollectionPage('Filmy', 'Family cinema', state.movies, state.moviesStatus, 'Nowy film', 'add-movie');
+  return renderCollectionPage({
+    title: 'Movies',
+    badge: 'Family cinema',
+    items: state.movies,
+    myItems: state.myMovies,
+    status: state.moviesStatus,
+    itemField: 'title',
+    imageField: 'poster',
+    itemPlaceholder: 'The Lord of the Rings',
+    imagePlaceholder: 'https://example.com/poster.jpg',
+    action: 'add-movie',
+  });
 }
 
 function renderNotFound() {
   return pageTemplate(`
     <section class="panel">
-      <h2>Nie znaleziono strony</h2>
-      <p class="muted">Ta trasa nie istnieje. Wróć na stronę główną.</p>
-      <a class="button primary" href="#/">Wróć do Home</a>
+      <h2>Page not found</h2>
+      <p class="muted">This route does not exist. Use the button below to go back home.</p>
+      <a class="button primary" href="#/">Back to home</a>
     </section>
   `);
 }
@@ -186,9 +343,10 @@ function render() {
   const logoutButton = document.querySelector('[data-action="logout"]');
   if (logoutButton) {
     logoutButton.addEventListener('click', () => {
-      state.isLoggedIn = false;
-      state.username = '';
-      state.authStatus = 'Wylogowano.';
+      persistSession('', '');
+      state.authStatus = 'You have been signed out.';
+      state.apiStatus = '';
+      refreshProtectedData();
       navigate('/');
     });
   }
@@ -200,12 +358,28 @@ function render() {
 
   const addDishButton = document.querySelector('[data-action="add-dish"]');
   if (addDishButton) {
-    addDishButton.addEventListener('click', () => handleAddItem('/dishes', 'dishes', 'dishesStatus', 'Dodano nowe danie.'));
+    addDishButton.addEventListener('click', () => handleCreateItem({
+      endpoint: endpoints.dishes,
+      payload: {
+        name: document.querySelector('#item-name')?.value.trim(),
+        photo: document.querySelector('#item-image')?.value.trim(),
+      },
+      successMessage: 'Dish added successfully.',
+      statusKey: 'dishesStatus',
+    }));
   }
 
   const addMovieButton = document.querySelector('[data-action="add-movie"]');
   if (addMovieButton) {
-    addMovieButton.addEventListener('click', () => handleAddItem('/movies', 'movies', 'moviesStatus', 'Dodano nowy film.'));
+    addMovieButton.addEventListener('click', () => handleCreateItem({
+      endpoint: endpoints.movies,
+      payload: {
+        title: document.querySelector('#item-name')?.value.trim(),
+        poster: document.querySelector('#item-image')?.value.trim(),
+      },
+      successMessage: 'Movie added successfully.',
+      statusKey: 'moviesStatus',
+    }));
   }
 }
 
@@ -213,56 +387,73 @@ async function handleAuthSubmit(event) {
   event.preventDefault();
   const submitter = event.submitter;
   const formData = new FormData(event.currentTarget);
-  const username = formData.get('username');
-  const password = formData.get('password');
+  const name = String(formData.get('name') || '').trim();
+  const password = String(formData.get('password') || '').trim();
 
   try {
     if (submitter?.value === 'register') {
-      await apiRequest('/register', {
+      await apiRequest(endpoints.register, {
         method: 'POST',
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ name, password }),
       });
-      state.authStatus = 'Konto utworzone. Możesz się zalogować.';
+      state.authStatus = 'Registration completed. You can now log in.';
+      state.name = name;
       render();
       return;
     }
 
-    await apiRequest('/login', {
+    const data = await apiRequest(endpoints.login, {
       method: 'POST',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ name, password }),
     });
-    state.isLoggedIn = true;
-    state.username = username;
-    state.authStatus = 'Zalogowano poprawnie.';
+
+    const token = data?.Token || data?.token || '';
+    if (!token) {
+      throw new Error('The backend did not return a JWT token.');
+    }
+
+    persistSession(token, name);
+    state.authStatus = 'Login successful. Protected endpoints are now available.';
+    await refreshProtectedData();
     navigate('/');
   } catch (error) {
-    state.authStatus = `Błąd autoryzacji: ${error.message}`;
+    state.authStatus = `Unable to authenticate. ${error.message}`;
     render();
   }
 }
 
-async function handleAddItem(path, collectionKey, statusKey, successMessage) {
-  const input = document.querySelector('#new-item-name');
-  const value = input?.value.trim();
+async function handleCreateItem({ endpoint, payload, successMessage, statusKey }) {
+  const cleanedPayload = Object.fromEntries(Object.entries(payload).filter(([, value]) => value));
 
-  if (!value) {
+  if (!Object.values(cleanedPayload)[0]) {
+    setStatus(statusKey, 'Please fill in the main text field before sending the request.');
     return;
   }
 
   try {
-    const createdItem = await apiRequest(path, {
+    await apiRequest(endpoint, {
       method: 'POST',
-      body: JSON.stringify({ name: value }),
+      body: JSON.stringify(cleanedPayload),
     });
-    state[collectionKey] = [...state[collectionKey], createdItem?.name ? createdItem : { name: value }];
-    state[statusKey] = successMessage;
-    render();
+    setStatus(statusKey, successMessage);
+    await refreshProtectedData();
   } catch (error) {
-    state[statusKey] = `Błąd zapisu: ${error.message}`;
-    render();
+    setStatus(statusKey, `Unable to save the item. ${error.message}`);
   }
 }
 
-loadDishes();
-loadMovies();
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
+
+refreshProtectedData();
 render();
