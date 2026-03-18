@@ -1,21 +1,44 @@
 # FamilyApp
 
-A React-based frontend for the FamilyApi backend. This app allows users to register, login, and manage dishes and movies.
+FamilyApp is a GitHub Pages frontend for the public FamilyApi backend.
 
-## Features
-- User registration and login
-- Add, view, and manage dishes
-- Add, view, and manage movies
+## Stack
+- HTML + CSS + Vanilla JavaScript
+- Hash-based routing that works on GitHub Pages
+- `fetch` for backend communication
 
-## Backend
-This app connects to the backend hosted at [http://mivvea.runasp.net](http://mivvea.runasp.net).
+## Build
+1. `npm install`
+2. `npm run build`
 
-## Setup
-1. Clone this repository
-2. Install dependencies: `npm install`
-3. Start the app: `npm start`
+The build output is written to `dist/`.
 
-## Hosting
-This app is hosted on GitHub Pages.
+## Deployment
+The repository is configured for GitHub Pages through GitHub Actions. Make sure the repository setting is:
+- **Settings → Pages → Source = GitHub Actions**
 
-## Updated for GitHub Pages Deployment
+Default application URL:
+- `https://mivvea.github.io/FamilyApp/`
+
+## API integration
+This frontend is aligned with the public `mivvea/FamilyApi` repository.
+
+It uses these controller routes:
+- `POST /User/register`
+- `POST /User/login`
+- `GET /Dishes`
+- `GET /Dishes/MyDishes`
+- `POST /Dishes`
+- `GET /Movies`
+- `GET /Movies/MyMovies`
+- `POST /Movies`
+
+The auth payload is:
+```json
+{
+  "name": "your-name",
+  "password": "your-password"
+}
+```
+
+The app stores the returned JWT token in `localStorage` and sends it as a Bearer token for protected endpoints.
