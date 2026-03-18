@@ -17,3 +17,5 @@ This app connects to the backend hosted at [http://mivvea.runasp.net](http://miv
 
 ## Hosting
 This app is hosted on GitHub Pages.
+
+## Updated for GitHub Pages Deployment
