@@ -3,9 +3,11 @@ const endpoints = {
   login: '/User/login',
   register: '/User/register',
   dishes: '/Dishes',
-  myDishes: '/Dishes/MyDishes',
+  myDishes: '/Dishes/my',
+  randomDish: '/Dishes/random',
   movies: '/Movies',
-  myMovies: '/Movies/MyMovies',
+  myMovies: '/Movies/my',
+  randomMovie: '/Movies/random',
 };
 
 const app = document.querySelector('#app');
@@ -43,14 +45,18 @@ const state = {
   apiStatus: '',
   dishes: [],
   myDishes: [],
+  randomDish: null,
   movies: [],
   myMovies: [],
+  randomMovie: null,
   dishesStatus: '',
   moviesStatus: '',
   dishesView: 'all',
   moviesView: 'all',
   showDishForm: false,
   showMovieForm: false,
+  editingDishId: '',
+  editingMovieId: '',
 };
 
 const routes = {
@@ -145,12 +151,26 @@ function normalizeCollection(payload) {
   return [];
 }
 
+function normalizeSingleItem(payload) {
+  if (!payload || Array.isArray(payload)) {
+    return null;
+  }
+
+  return typeof payload === 'object' ? payload : null;
+}
+
+function getItemId(item) {
+  return item?.id || item?.Id || item?._id || '';
+}
+
 async function refreshProtectedData() {
   if (!isSignedIn()) {
     state.dishes = [];
     state.myDishes = [];
+    state.randomDish = null;
     state.movies = [];
     state.myMovies = [];
+    state.randomMovie = null;
     state.dishesStatus = '';
     state.moviesStatus = '';
     render();
@@ -162,17 +182,21 @@ async function refreshProtectedData() {
   render();
 
   try {
-    const [dishes, myDishes, movies, myMovies] = await Promise.all([
+    const [dishes, myDishes, randomDish, movies, myMovies, randomMovie] = await Promise.all([
       apiRequest(endpoints.dishes),
       apiRequest(endpoints.myDishes).catch((error) => ({ error: error.message })),
+      apiRequest(endpoints.randomDish).catch(() => null),
       apiRequest(endpoints.movies),
       apiRequest(endpoints.myMovies).catch((error) => ({ error: error.message })),
+      apiRequest(endpoints.randomMovie).catch(() => null),
     ]);
 
     state.dishes = normalizeCollection(dishes);
     state.myDishes = normalizeCollection(myDishes);
+    state.randomDish = normalizeSingleItem(randomDish);
     state.movies = normalizeCollection(movies);
     state.myMovies = normalizeCollection(myMovies);
+    state.randomMovie = normalizeSingleItem(randomMovie);
     state.dishesStatus = myDishes?.error ? `All dishes loaded. ${myDishes.error}` : '';
     state.moviesStatus = myMovies?.error ? `All movies loaded. ${myMovies.error}` : '';
   } catch (error) {
@@ -184,17 +208,10 @@ async function refreshProtectedData() {
   render();
 }
 
-function pickRandom(items) {
-  if (!items.length) {
-    return [];
-  }
-
-  return [items[Math.floor(Math.random() * items.length)]];
-}
-
 function currentSectionItems(kind) {
   const allItems = kind === 'dishes' ? state.dishes : state.movies;
   const myItems = kind === 'dishes' ? state.myDishes : state.myMovies;
+  const randomItem = kind === 'dishes' ? state.randomDish : state.randomMovie;
   const view = kind === 'dishes' ? state.dishesView : state.moviesView;
 
   if (view === 'mine') {
@@ -202,7 +219,7 @@ function currentSectionItems(kind) {
   }
 
   if (view === 'random') {
-    return pickRandom(allItems);
+    return randomItem ? [randomItem] : [];
   }
 
   return allItems;
@@ -233,6 +250,27 @@ function pageTemplate(content) {
 }
 
 function renderHome() {
+  if (isSignedIn()) {
+    return pageTemplate(`
+      <section class="panel auth-layout">
+        <div>
+          <span class="badge">Welcome back</span>
+          <h1>Hi, ${escapeHtml(state.name || 'friend')}!</h1>
+          <p class="muted">Use the dishes and movies tabs to manage all items, only your items, and a randomized pick from the API.</p>
+          <p class="muted">API status: ${escapeHtml(state.apiStatus || 'Ready')}</p>
+        </div>
+
+        <section class="auth-card">
+          <h2>Quick actions</h2>
+          <div class="stack">
+            <button class="button primary" type="button" data-go-route="/dishes">Open dishes</button>
+            <button class="button ghost" type="button" data-go-route="/movies">Open movies</button>
+          </div>
+        </section>
+      </section>
+    `);
+  }
+
   return pageTemplate(`
     <section class="panel auth-layout">
       <div>
@@ -273,7 +311,9 @@ function renderHome() {
 function renderCollectionPage({ kind, title, badge, status, itemField, imageField, imageLabel, inputPlaceholder, imagePlaceholder }) {
   const view = kind === 'dishes' ? state.dishesView : state.moviesView;
   const showForm = kind === 'dishes' ? state.showDishForm : state.showMovieForm;
+  const editingId = kind === 'dishes' ? state.editingDishId : state.editingMovieId;
   const items = currentSectionItems(kind);
+  const ownItems = kind === 'dishes' ? state.myDishes : state.myMovies;
 
   return pageTemplate(`
     <section class="panel collection-layout">
@@ -284,6 +324,7 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
         <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only my items</button>
         <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Randomized</button>
         <p class="muted small-text">${escapeHtml(status || 'Choose a tab to browse the collection.')}</p>
+        <p class="muted small-text">Editable items available: ${ownItems.length}</p>
       </aside>
 
       <div class="content-panel">
@@ -299,23 +340,30 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
           <form class="add-form" data-add-form="${kind}">
             <label>
               ${title === 'Dishes' ? 'Dish name' : 'Movie title'}
-              <input name="primary" type="text" placeholder="${inputPlaceholder}" required />
+              <input name="primary" type="text" placeholder="${inputPlaceholder}" value="${escapeAttribute(getEditingValue(kind, itemField))}" required />
             </label>
             <label>
               ${imageLabel}
-              <input name="image" type="url" placeholder="${imagePlaceholder}" />
+              <input name="image" type="url" placeholder="${imagePlaceholder}" value="${escapeAttribute(getEditingValue(kind, imageField))}" />
             </label>
-            <button class="button primary" type="submit">Save</button>
+            <button class="button primary" type="submit">${editingId ? 'Save changes' : 'Save'}</button>
           </form>
         ` : ''}
 
-        ${renderMediaList(items, itemField, imageField, title === 'Dishes' ? 'No dishes to display.' : 'No movies to display.')}
+        ${renderMediaList({ kind, items, itemField, imageField, emptyText: title === 'Dishes' ? 'No dishes to display.' : 'No movies to display.' })}
       </div>
     </section>
   `);
 }
 
-function renderMediaList(items, itemField, imageField, emptyText) {
+function getEditingValue(kind, field) {
+  const collection = kind === 'dishes' ? state.myDishes : state.myMovies;
+  const editingId = kind === 'dishes' ? state.editingDishId : state.editingMovieId;
+  const item = collection.find((entry) => getItemId(entry) === editingId);
+  return item?.[field] || '';
+}
+
+function renderMediaList({ kind, items, itemField, imageField, emptyText }) {
   if (!items.length) {
     return `<div class="empty-state">${escapeHtml(emptyText)}</div>`;
   }
@@ -327,6 +375,8 @@ function renderMediaList(items, itemField, imageField, emptyText) {
           const title = item[itemField] || 'Untitled';
           const image = item[imageField];
           const addedBy = item.addedBy ? `<span class="meta-tag">Added by ${escapeHtml(item.addedBy)}</span>` : '';
+          const isOwnItem = item.addedBy && item.addedBy === state.name;
+          const itemId = getItemId(item);
           return `
             <li class="media-row">
               <div class="thumb-shell">
@@ -335,6 +385,12 @@ function renderMediaList(items, itemField, imageField, emptyText) {
               <div class="media-copy">
                 <strong>${escapeHtml(title)}</strong>
                 ${addedBy}
+                ${isOwnItem ? `
+                  <div class="row-actions">
+                    <button class="button secondary" type="button" data-edit-kind="${kind}" data-item-id="${escapeAttribute(itemId)}">Edit</button>
+                    <button class="button danger" type="button" data-delete-kind="${kind}" data-item-id="${escapeAttribute(itemId)}">Delete</button>
+                  </div>
+                ` : ''}
               </div>
             </li>
           `;
@@ -385,10 +441,18 @@ function render() {
       state.apiStatus = '';
       state.showDishForm = false;
       state.showMovieForm = false;
+      state.editingDishId = '';
+      state.editingMovieId = '';
       await refreshProtectedData();
       navigate('/');
     });
   }
+
+  document.querySelectorAll('[data-go-route]').forEach((button) => {
+    button.addEventListener('click', () => {
+      navigate(button.getAttribute('data-go-route') || '/');
+    });
+  });
 
   document.querySelectorAll('[data-auth-mode]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -404,13 +468,19 @@ function render() {
   }
 
   document.querySelectorAll('[data-view-kind]').forEach((button) => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const kind = button.getAttribute('data-view-kind');
       const viewName = button.getAttribute('data-view');
       if (kind === 'dishes') {
         state.dishesView = viewName || 'all';
+        if (state.dishesView === 'random') {
+          state.randomDish = normalizeSingleItem(await apiRequest(endpoints.randomDish).catch(() => state.randomDish));
+        }
       } else {
         state.moviesView = viewName || 'all';
+        if (state.moviesView === 'random') {
+          state.randomMovie = normalizeSingleItem(await apiRequest(endpoints.randomMovie).catch(() => state.randomMovie));
+        }
       }
       render();
     });
@@ -421,15 +491,42 @@ function render() {
       const kind = button.getAttribute('data-toggle-form');
       if (kind === 'dishes') {
         state.showDishForm = !state.showDishForm;
+        state.editingDishId = state.showDishForm ? state.editingDishId : '';
       } else {
         state.showMovieForm = !state.showMovieForm;
+        state.editingMovieId = state.showMovieForm ? state.editingMovieId : '';
       }
       render();
     });
   });
 
+  document.querySelectorAll('[data-edit-kind]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const kind = button.getAttribute('data-edit-kind');
+      const itemId = button.getAttribute('data-item-id') || '';
+      if (kind === 'dishes') {
+        state.editingDishId = itemId;
+        state.showDishForm = true;
+        state.dishesView = 'mine';
+      } else {
+        state.editingMovieId = itemId;
+        state.showMovieForm = true;
+        state.moviesView = 'mine';
+      }
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-delete-kind]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const kind = button.getAttribute('data-delete-kind');
+      const itemId = button.getAttribute('data-item-id') || '';
+      await handleDeleteItem(kind || '', itemId);
+    });
+  });
+
   document.querySelectorAll('[data-add-form]').forEach((form) => {
-    form.addEventListener('submit', handleAddItem);
+    form.addEventListener('submit', handleSaveItem);
   });
 }
 
@@ -465,7 +562,7 @@ async function handleAuthSubmit(event) {
     persistSession(token, name);
     state.authStatus = 'Login successful.';
     await refreshProtectedData();
-    navigate('/dishes');
+    navigate('/');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     state.authStatus = `Unable to authenticate. ${message}`;
@@ -473,7 +570,7 @@ async function handleAuthSubmit(event) {
   }
 }
 
-async function handleAddItem(event) {
+async function handleSaveItem(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const kind = form.getAttribute('data-add-form');
@@ -488,21 +585,30 @@ async function handleAddItem(event) {
   const isDish = kind === 'dishes';
   const endpoint = isDish ? endpoints.dishes : endpoints.movies;
   const payload = isDish ? { name: primary, photo: image } : { title: primary, poster: image };
+  const editingId = isDish ? state.editingDishId : state.editingMovieId;
 
   try {
+    if (editingId) {
+      await apiRequest(`${endpoint}/${editingId}`, { method: 'DELETE' });
+    }
+
     await apiRequest(endpoint, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+
     if (isDish) {
       state.showDishForm = false;
+      state.editingDishId = '';
       state.dishesView = 'mine';
-      state.dishesStatus = 'Dish added successfully.';
+      state.dishesStatus = editingId ? 'Dish updated successfully.' : 'Dish added successfully.';
     } else {
       state.showMovieForm = false;
+      state.editingMovieId = '';
       state.moviesView = 'mine';
-      state.moviesStatus = 'Movie added successfully.';
+      state.moviesStatus = editingId ? 'Movie updated successfully.' : 'Movie added successfully.';
     }
+
     await refreshProtectedData();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -510,6 +616,41 @@ async function handleAddItem(event) {
       state.dishesStatus = `Unable to save dish. ${message}`;
     } else {
       state.moviesStatus = `Unable to save movie. ${message}`;
+    }
+    render();
+  }
+}
+
+async function handleDeleteItem(kind, itemId) {
+  if (!itemId) {
+    return;
+  }
+
+  const isDish = kind === 'dishes';
+  const endpoint = isDish ? endpoints.dishes : endpoints.movies;
+
+  try {
+    await apiRequest(`${endpoint}/${itemId}`, { method: 'DELETE' });
+    if (isDish) {
+      state.dishesStatus = 'Dish deleted successfully.';
+      if (state.editingDishId === itemId) {
+        state.editingDishId = '';
+        state.showDishForm = false;
+      }
+    } else {
+      state.moviesStatus = 'Movie deleted successfully.';
+      if (state.editingMovieId === itemId) {
+        state.editingMovieId = '';
+        state.showMovieForm = false;
+      }
+    }
+    await refreshProtectedData();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isDish) {
+      state.dishesStatus = `Unable to delete dish. ${message}`;
+    } else {
+      state.moviesStatus = `Unable to delete movie. ${message}`;
     }
     render();
   }

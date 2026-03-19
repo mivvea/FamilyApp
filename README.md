@@ -27,14 +27,18 @@ Supported backend functions in the UI:
 - `POST /User/register`
 - `POST /User/login`
 - `GET /Dishes`
-- `GET /Dishes/MyDishes`
+- `GET /Dishes/my`
+- `GET /Dishes/random`
 - `POST /Dishes`
+- `DELETE /Dishes/{id}`
 - `GET /Movies`
-- `GET /Movies/MyMovies`
+- `GET /Movies/my`
+- `GET /Movies/random`
 - `POST /Movies`
+- `DELETE /Movies/{id}`
 
-## UX changes
-- The home page is now dedicated to login/register.
-- Dishes and Movies navigation is shown only after login.
-- Each collection page includes a left-side menu with `All items`, `Only my items`, and `Randomized` views.
-- Items render as equal-sized media rows, and adding a new item is handled through a plus button next to the list.
+## Notes
+- The home page now greets logged-in users with `Hi, user!` instead of showing the auth form.
+- The app now uses the current lowercase `/my` routes from `FamilyApi`.
+- Edit is implemented in the frontend as a replace flow: delete the owned item and create the updated version with the new values.
+- Delete and edit actions are shown only for items owned by the logged-in user.
