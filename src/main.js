@@ -22,7 +22,7 @@ function writeStorage(key, value) {
   try {
     window.localStorage.setItem(key, value);
   } catch {
-    // Ignore storage failures and keep the UI usable.
+    // Keep the UI usable even when storage is blocked.
   }
 }
 
@@ -30,38 +30,37 @@ function removeStorage(key) {
   try {
     window.localStorage.removeItem(key);
   } catch {
-    // Ignore storage failures and keep the UI usable.
+    // Keep the UI usable even when storage is blocked.
   }
 }
 
 const state = {
   route: window.location.hash.replace(/^#/, '') || '/',
+  authMode: 'login',
   name: readStorage('familyapp.name'),
   authToken: readStorage('familyapp.authToken'),
+  authStatus: '',
+  apiStatus: '',
   dishes: [],
   myDishes: [],
   movies: [],
   myMovies: [],
   dishesStatus: '',
   moviesStatus: '',
-  authStatus: '',
-  apiStatus: '',
+  dishesView: 'all',
+  moviesView: 'all',
+  showDishForm: false,
+  showMovieForm: false,
 };
 
 const routes = {
   '/': renderHome,
-  '/login': renderLogin,
-  '/dishes': renderDishes,
-  '/movies': renderMovies,
+  '/dishes': renderDishesPage,
+  '/movies': renderMoviesPage,
 };
 
 function isSignedIn() {
   return Boolean(state.authToken);
-}
-
-function setStatus(key, message) {
-  state[key] = message;
-  render();
 }
 
 function navigate(route) {
@@ -72,6 +71,13 @@ window.addEventListener('hashchange', () => {
   state.route = window.location.hash.replace(/^#/, '') || '/';
   render();
 });
+
+function ensureProtectedRoute() {
+  if (!isSignedIn() && state.route !== '/') {
+    state.route = '/';
+    window.location.hash = '/';
+  }
+}
 
 function getHeaders(extraHeaders = {}) {
   return {
@@ -145,14 +151,15 @@ async function refreshProtectedData() {
     state.myDishes = [];
     state.movies = [];
     state.myMovies = [];
-    state.dishesStatus = 'Sign in to load dishes.';
-    state.moviesStatus = 'Sign in to load movies.';
+    state.dishesStatus = '';
+    state.moviesStatus = '';
     render();
     return;
   }
 
-  setStatus('dishesStatus', 'Loading dishes...');
-  setStatus('moviesStatus', 'Loading movies...');
+  state.dishesStatus = 'Loading dishes...';
+  state.moviesStatus = 'Loading movies...';
+  render();
 
   try {
     const [dishes, myDishes, movies, myMovies] = await Promise.all([
@@ -166,14 +173,39 @@ async function refreshProtectedData() {
     state.myDishes = normalizeCollection(myDishes);
     state.movies = normalizeCollection(movies);
     state.myMovies = normalizeCollection(myMovies);
-    state.dishesStatus = myDishes?.error ? `All dishes loaded. My dishes: ${myDishes.error}` : '';
-    state.moviesStatus = myMovies?.error ? `All movies loaded. My movies: ${myMovies.error}` : '';
+    state.dishesStatus = myDishes?.error ? `All dishes loaded. ${myDishes.error}` : '';
+    state.moviesStatus = myMovies?.error ? `All movies loaded. ${myMovies.error}` : '';
   } catch (error) {
-    state.dishesStatus = `Unable to load dishes. ${error.message}`;
-    state.moviesStatus = `Unable to load movies. ${error.message}`;
+    const message = error instanceof Error ? error.message : String(error);
+    state.dishesStatus = `Unable to load dishes. ${message}`;
+    state.moviesStatus = `Unable to load movies. ${message}`;
   }
 
   render();
+}
+
+function pickRandom(items) {
+  if (!items.length) {
+    return [];
+  }
+
+  return [items[Math.floor(Math.random() * items.length)]];
+}
+
+function currentSectionItems(kind) {
+  const allItems = kind === 'dishes' ? state.dishes : state.movies;
+  const myItems = kind === 'dishes' ? state.myDishes : state.myMovies;
+  const view = kind === 'dishes' ? state.dishesView : state.moviesView;
+
+  if (view === 'mine') {
+    return myItems;
+  }
+
+  if (view === 'random') {
+    return pickRandom(allItems);
+  }
+
+  return allItems;
 }
 
 function pageTemplate(content) {
@@ -181,15 +213,19 @@ function pageTemplate(content) {
     <div class="app-shell">
       <header class="topbar">
         <a class="brand" href="#/">FamilyApp</a>
-        <nav>
-          <ul class="nav-list">
-            <li><a class="${state.route === '/' ? 'active' : ''}" href="#/">Home</a></li>
-            <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes">Dishes</a></li>
-            <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies">Movies</a></li>
-            <li><a class="${state.route === '/login' ? 'active' : ''}" href="#/login">Login</a></li>
-          </ul>
-        </nav>
-        ${isSignedIn() ? '<button class="button ghost" data-action="logout">Logout</button>' : ''}
+        ${isSignedIn()
+          ? `
+            <nav>
+              <ul class="nav-list">
+                <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes">Dishes</a></li>
+                <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies">Movies</a></li>
+              </ul>
+            </nav>
+            <div class="topbar-actions">
+              <span class="user-pill">${escapeHtml(state.name || 'User')}</span>
+              <button class="button ghost" data-action="logout">Logout</button>
+            </div>`
+          : '<span class="muted">Sign in to browse your family lists.</span>'}
       </header>
       <main class="page-content">${content}</main>
     </div>
@@ -198,117 +234,105 @@ function pageTemplate(content) {
 
 function renderHome() {
   return pageTemplate(`
-    <section class="panel hero">
-      <span class="badge">FamilyApi connected</span>
-      <h1>FamilyApp now matches the actual controller routes in FamilyApi.</h1>
-      <p>
-        The frontend uses <code>/User/login</code>, <code>/User/register</code>, <code>/Dishes</code>, <code>/Dishes/MyDishes</code>, <code>/Movies</code>, and <code>/Movies/MyMovies</code>.
-      </p>
-      <div class="status-row">
-        <strong>Status:</strong>
-        <span>${isSignedIn() ? `Signed in as ${state.name}` : 'Not signed in'}</span>
+    <section class="panel auth-layout">
+      <div>
+        <span class="badge">FamilyApi access</span>
+        <h1>${state.authMode === 'login' ? 'Login to FamilyApp' : 'Create your FamilyApp account'}</h1>
+        <p class="muted">
+          The home page is now dedicated to authentication. Dishes and movies are available only after login.
+        </p>
+        <p class="muted">API status: ${escapeHtml(state.apiStatus || 'Waiting for login...')}</p>
       </div>
-      <div class="status-row diagnostic-row">
-        <strong>API:</strong>
-        <span>${state.apiStatus || 'Waiting for the first successful API request...'}</span>
-      </div>
-      <div class="cta-row">
-        <a class="button primary" href="#/dishes">Open dishes</a>
-        <a class="button secondary" href="#/movies">Open movies</a>
-      </div>
-    </section>
-  `);
-}
 
-function renderLogin() {
-  return pageTemplate(`
-    <section class="panel auth-panel">
-      <h2>Login or register</h2>
-      <p class="muted">FamilyApi expects a JSON body with <code>name</code> and <code>password</code>.</p>
-      <form class="stack" id="auth-form">
-        <label>
-          Name
-          <input name="name" type="text" placeholder="Your name" value="${escapeAttribute(state.name)}" required />
-        </label>
-        <label>
-          Password
-          <input name="password" type="password" placeholder="Password" required />
-        </label>
-        <div class="cta-row">
-          <button class="button primary" type="submit" name="mode" value="login">Login</button>
-          <button class="button secondary" type="submit" name="mode" value="register">Register</button>
+      <section class="auth-card">
+        <div class="auth-tabs">
+          <button class="tab-button ${state.authMode === 'login' ? 'active' : ''}" data-auth-mode="login">Login</button>
+          <button class="tab-button ${state.authMode === 'register' ? 'active' : ''}" data-auth-mode="register">Register</button>
         </div>
-      </form>
-      ${state.authStatus ? `<p class="message ${state.authStatus.startsWith('Unable') ? 'error' : 'success'}">${state.authStatus}</p>` : ''}
+
+        <form class="stack" id="auth-form">
+          <label>
+            Name
+            <input name="name" type="text" placeholder="Your name" value="${escapeAttribute(state.name)}" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" placeholder="Password" required />
+          </label>
+          <button class="button primary" type="submit">
+            ${state.authMode === 'login' ? 'Login' : 'Register'}
+          </button>
+        </form>
+
+        ${state.authStatus ? `<p class="message ${state.authStatus.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(state.authStatus)}</p>` : ''}
+      </section>
     </section>
   `);
 }
 
-function renderCollectionPage({
-  title,
-  badge,
-  items,
-  myItems,
-  status,
-  itemField,
-  imageField,
-  itemPlaceholder,
-  imagePlaceholder,
-  action,
-}) {
+function renderCollectionPage({ kind, title, badge, status, itemField, imageField, imageLabel, inputPlaceholder, imagePlaceholder }) {
+  const view = kind === 'dishes' ? state.dishesView : state.moviesView;
+  const showForm = kind === 'dishes' ? state.showDishForm : state.showMovieForm;
+  const items = currentSectionItems(kind);
+
   return pageTemplate(`
-    <section class="panel">
-      <div class="section-heading">
-        <div>
-          <span class="badge">${badge}</span>
-          <h2>${title}</h2>
+    <section class="panel collection-layout">
+      <aside class="side-menu">
+        <span class="badge">${badge}</span>
+        <h2>${title}</h2>
+        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All items</button>
+        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only my items</button>
+        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Randomized</button>
+        <p class="muted small-text">${escapeHtml(status || 'Choose a tab to browse the collection.')}</p>
+      </aside>
+
+      <div class="content-panel">
+        <div class="list-toolbar">
+          <div>
+            <h3>${view === 'all' ? `All ${title.toLowerCase()}` : view === 'mine' ? `My ${title.toLowerCase()}` : `Random ${title.toLowerCase().slice(0, -1)}`}</h3>
+            <p class="muted">All thumbnails use a fixed format and size.</p>
+          </div>
+          <button class="icon-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
         </div>
-        <p class="muted">${isSignedIn() ? 'The backend requires a valid JWT for all list endpoints.' : 'Sign in first because these endpoints are protected by JWT auth.'}</p>
-      </div>
 
-      ${status ? `<p class="message ${status.startsWith('Unable') ? 'error' : 'loading'}">${status}</p>` : ''}
+        ${showForm ? `
+          <form class="add-form" data-add-form="${kind}">
+            <label>
+              ${title === 'Dishes' ? 'Dish name' : 'Movie title'}
+              <input name="primary" type="text" placeholder="${inputPlaceholder}" required />
+            </label>
+            <label>
+              ${imageLabel}
+              <input name="image" type="url" placeholder="${imagePlaceholder}" />
+            </label>
+            <button class="button primary" type="submit">Save</button>
+          </form>
+        ` : ''}
 
-      <section class="subsection">
-        <h3>All items</h3>
-        ${renderCards(items, itemField, imageField, 'No items returned yet.')}
-      </section>
-
-      <section class="subsection">
-        <h3>My items</h3>
-        ${renderCards(myItems, itemField, imageField, 'No personal items returned yet.')}
-      </section>
-
-      <div class="stack compact">
-        <label>
-          ${title === 'Dishes' ? 'Dish name' : 'Movie title'}
-          <input id="item-name" type="text" placeholder="${itemPlaceholder}" ${isSignedIn() ? '' : 'disabled'} />
-        </label>
-        <label>
-          ${title === 'Dishes' ? 'Photo URL' : 'Poster URL'}
-          <input id="item-image" type="url" placeholder="${imagePlaceholder}" ${isSignedIn() ? '' : 'disabled'} />
-        </label>
-        <button class="button primary" type="button" data-action="${action}" ${isSignedIn() ? '' : 'disabled'}>Add</button>
+        ${renderMediaList(items, itemField, imageField, title === 'Dishes' ? 'No dishes to display.' : 'No movies to display.')}
       </div>
     </section>
   `);
 }
 
-function renderCards(items, itemField, imageField, emptyText) {
+function renderMediaList(items, itemField, imageField, emptyText) {
   if (!items.length) {
-    return `<ul class="card-list"><li class="card-item">${emptyText}</li></ul>`;
+    return `<div class="empty-state">${escapeHtml(emptyText)}</div>`;
   }
 
   return `
-    <ul class="card-list">
+    <ul class="media-list">
       ${items
         .map((item) => {
           const title = item[itemField] || 'Untitled';
           const image = item[imageField];
-          const addedBy = item.addedBy ? `<p class="card-meta">Added by ${item.addedBy}</p>` : '';
+          const addedBy = item.addedBy ? `<span class="meta-tag">Added by ${escapeHtml(item.addedBy)}</span>` : '';
           return `
-            <li class="card-item media-card">
-              ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(title)}" />` : ''}
-              <div>
+            <li class="media-row">
+              <div class="thumb-shell">
+                ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(title)}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
+              </div>
+              <div class="media-copy">
                 <strong>${escapeHtml(title)}</strong>
                 ${addedBy}
               </div>
@@ -320,107 +344,109 @@ function renderCards(items, itemField, imageField, emptyText) {
   `;
 }
 
-function renderDishes() {
+function renderDishesPage() {
   return renderCollectionPage({
+    kind: 'dishes',
     title: 'Dishes',
     badge: 'Family menu',
-    items: state.dishes,
-    myItems: state.myDishes,
     status: state.dishesStatus,
     itemField: 'name',
     imageField: 'photo',
-    itemPlaceholder: 'Homemade pizza',
+    imageLabel: 'Photo URL',
+    inputPlaceholder: 'Homemade pizza',
     imagePlaceholder: 'https://example.com/dish.jpg',
-    action: 'add-dish',
   });
 }
 
-function renderMovies() {
+function renderMoviesPage() {
   return renderCollectionPage({
+    kind: 'movies',
     title: 'Movies',
     badge: 'Family cinema',
-    items: state.movies,
-    myItems: state.myMovies,
     status: state.moviesStatus,
     itemField: 'title',
     imageField: 'poster',
-    itemPlaceholder: 'The Lord of the Rings',
+    imageLabel: 'Poster URL',
+    inputPlaceholder: 'The Lord of the Rings',
     imagePlaceholder: 'https://example.com/poster.jpg',
-    action: 'add-movie',
   });
 }
 
-function renderNotFound() {
-  return pageTemplate(`
-    <section class="panel">
-      <h2>Page not found</h2>
-      <p class="muted">This route does not exist. Use the button below to go back home.</p>
-      <a class="button primary" href="#/">Back to home</a>
-    </section>
-  `);
-}
-
 function render() {
-  const view = routes[state.route] || renderNotFound;
+  ensureProtectedRoute();
+  const view = routes[state.route] || renderHome;
   app.innerHTML = view();
 
   const logoutButton = document.querySelector('[data-action="logout"]');
   if (logoutButton) {
-    logoutButton.addEventListener('click', () => {
+    logoutButton.addEventListener('click', async () => {
       persistSession('', '');
       state.authStatus = 'You have been signed out.';
       state.apiStatus = '';
-      refreshProtectedData();
+      state.showDishForm = false;
+      state.showMovieForm = false;
+      await refreshProtectedData();
       navigate('/');
     });
   }
+
+  document.querySelectorAll('[data-auth-mode]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.authMode = button.getAttribute('data-auth-mode') || 'login';
+      state.authStatus = '';
+      render();
+    });
+  });
 
   const authForm = document.querySelector('#auth-form');
   if (authForm) {
     authForm.addEventListener('submit', handleAuthSubmit);
   }
 
-  const addDishButton = document.querySelector('[data-action="add-dish"]');
-  if (addDishButton) {
-    addDishButton.addEventListener('click', () => handleCreateItem({
-      endpoint: endpoints.dishes,
-      payload: {
-        name: document.querySelector('#item-name')?.value.trim(),
-        photo: document.querySelector('#item-image')?.value.trim(),
-      },
-      successMessage: 'Dish added successfully.',
-      statusKey: 'dishesStatus',
-    }));
-  }
+  document.querySelectorAll('[data-view-kind]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const kind = button.getAttribute('data-view-kind');
+      const viewName = button.getAttribute('data-view');
+      if (kind === 'dishes') {
+        state.dishesView = viewName || 'all';
+      } else {
+        state.moviesView = viewName || 'all';
+      }
+      render();
+    });
+  });
 
-  const addMovieButton = document.querySelector('[data-action="add-movie"]');
-  if (addMovieButton) {
-    addMovieButton.addEventListener('click', () => handleCreateItem({
-      endpoint: endpoints.movies,
-      payload: {
-        title: document.querySelector('#item-name')?.value.trim(),
-        poster: document.querySelector('#item-image')?.value.trim(),
-      },
-      successMessage: 'Movie added successfully.',
-      statusKey: 'moviesStatus',
-    }));
-  }
+  document.querySelectorAll('[data-toggle-form]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const kind = button.getAttribute('data-toggle-form');
+      if (kind === 'dishes') {
+        state.showDishForm = !state.showDishForm;
+      } else {
+        state.showMovieForm = !state.showMovieForm;
+      }
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-add-form]').forEach((form) => {
+    form.addEventListener('submit', handleAddItem);
+  });
 }
 
 async function handleAuthSubmit(event) {
   event.preventDefault();
-  const submitter = event.submitter;
   const formData = new FormData(event.currentTarget);
   const name = String(formData.get('name') || '').trim();
   const password = String(formData.get('password') || '').trim();
 
   try {
-    if (submitter?.value === 'register') {
+    if (state.authMode === 'register') {
       await apiRequest(endpoints.register, {
         method: 'POST',
         body: JSON.stringify({ name, password }),
       });
       state.authStatus = 'Registration completed. You can now log in.';
+      state.authMode = 'login';
       state.name = name;
       render();
       return;
@@ -437,32 +463,55 @@ async function handleAuthSubmit(event) {
     }
 
     persistSession(token, name);
-    state.authStatus = 'Login successful. Protected endpoints are now available.';
+    state.authStatus = 'Login successful.';
     await refreshProtectedData();
-    navigate('/');
+    navigate('/dishes');
   } catch (error) {
-    state.authStatus = `Unable to authenticate. ${error.message}`;
+    const message = error instanceof Error ? error.message : String(error);
+    state.authStatus = `Unable to authenticate. ${message}`;
     render();
   }
 }
 
-async function handleCreateItem({ endpoint, payload, successMessage, statusKey }) {
-  const cleanedPayload = Object.fromEntries(Object.entries(payload).filter(([, value]) => value));
+async function handleAddItem(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const kind = form.getAttribute('data-add-form');
+  const formData = new FormData(form);
+  const primary = String(formData.get('primary') || '').trim();
+  const image = String(formData.get('image') || '').trim();
 
-  if (!Object.values(cleanedPayload)[0]) {
-    setStatus(statusKey, 'Please fill in the main text field before sending the request.');
+  if (!primary) {
     return;
   }
+
+  const isDish = kind === 'dishes';
+  const endpoint = isDish ? endpoints.dishes : endpoints.movies;
+  const payload = isDish ? { name: primary, photo: image } : { title: primary, poster: image };
 
   try {
     await apiRequest(endpoint, {
       method: 'POST',
-      body: JSON.stringify(cleanedPayload),
+      body: JSON.stringify(payload),
     });
-    setStatus(statusKey, successMessage);
+    if (isDish) {
+      state.showDishForm = false;
+      state.dishesView = 'mine';
+      state.dishesStatus = 'Dish added successfully.';
+    } else {
+      state.showMovieForm = false;
+      state.moviesView = 'mine';
+      state.moviesStatus = 'Movie added successfully.';
+    }
     await refreshProtectedData();
   } catch (error) {
-    setStatus(statusKey, `Unable to save the item. ${error.message}`);
+    const message = error instanceof Error ? error.message : String(error);
+    if (isDish) {
+      state.dishesStatus = `Unable to save dish. ${message}`;
+    } else {
+      state.moviesStatus = `Unable to save movie. ${message}`;
+    }
+    render();
   }
 }
 

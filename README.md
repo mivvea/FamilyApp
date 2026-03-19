@@ -23,7 +23,7 @@ Default application URL:
 ## API integration
 This frontend is aligned with the public `mivvea/FamilyApi` repository.
 
-It uses these controller routes:
+Supported backend functions in the UI:
 - `POST /User/register`
 - `POST /User/login`
 - `GET /Dishes`
@@ -33,12 +33,8 @@ It uses these controller routes:
 - `GET /Movies/MyMovies`
 - `POST /Movies`
 
-The auth payload is:
-```json
-{
-  "name": "your-name",
-  "password": "your-password"
-}
-```
-
-The app stores the returned JWT token in `localStorage` and sends it as a Bearer token for protected endpoints.
+## UX changes
+- The home page is now dedicated to login/register.
+- Dishes and Movies navigation is shown only after login.
+- Each collection page includes a left-side menu with `All items`, `Only my items`, and `Randomized` views.
+- Items render as equal-sized media rows, and adding a new item is handled through a plus button next to the list.
