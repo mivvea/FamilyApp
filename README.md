@@ -1,7 +1,3 @@
-# FamilyApp
-
-FamilyApp is a GitHub Pages frontend for the public FamilyApi backend.
-
 ## Stack
 - HTML + CSS + Vanilla JavaScript
 - Hash-based routing that works on GitHub Pages
