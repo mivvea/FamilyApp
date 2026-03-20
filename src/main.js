@@ -328,7 +328,7 @@ function renderHome() {
           <span class="badge">Welcome back</span>
           <h1>Hi, ${escapeHtml(state.name || 'friend')}!</h1>
           <div class="welcome-media">
-            ${state.helloVideoUrl ? `<video class="hello-video" src="${escapeAttribute(state.helloVideoUrl)}" controls autoplay loop playsinline></video>` : `<div class="empty-state">Welcome video is not available.</div>`}
+            ${state.helloVideoUrl ? `<video class="hello-video" src="${escapeAttribute(state.helloVideoUrl)}" controls autoplay muted loop playsinline></video>` : `<div class="empty-state">Welcome video is not available.</div>`}
             <div class="profile-card">
               ${state.userPhotoUrl
                 ? `<img class="profile-photo" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
