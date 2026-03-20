@@ -253,7 +253,7 @@ function resolveMediaUrl(value) {
     return path;
   }
 
-  if (/^\/?File\/GetVideo$/i.test(path)) {
+  if (/^\/?File\/HelloVideo$/i.test(path)) {
     return resolveProtectedEndpointUrl(path, `${API_BASE_URL}/${path.replace(/^\/+/, '')}`);
   }
 
@@ -438,7 +438,7 @@ function pageTemplate(content) {
 function renderHome() {
   if (isSignedIn()) {
     const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
-    const helloVideoUrl = resolveProtectedEndpointUrl('__hello_video__', `${API_BASE_URL}/File/GetVideo`);
+    const helloVideoUrl = resolveProtectedEndpointUrl('__hello_video__', `${API_BASE_URL}/File/HelloVideo`);
     return pageTemplate(`
       <section class="panel auth-layout">
         <div>
@@ -962,215 +962,9 @@ async function handleAuthSubmit(event) {
     await hydrateWelcomeMedia();
     navigate('/');
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    state.authStatus = `Unable to authenticate. ${message}`;
-    render();
+    state.authStatus = `Unable to ${state.authMode === 'login' ? 'login' : 'register'}. ${error.message}`;
   }
-}
-
-async function uploadFileToServer(file) {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${API_BASE_URL}/File/upload`, {
-    method: 'POST',
-    headers: state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {},
-    body: formData,
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data?.message || data?.Message || `HTTP ${response.status}`);
-  }
-
-  const filePath = extractPathValue(data);
-  if (filePath) {
-    return filePath;
-  }
-
-  const fileName = data?.fileName || data?.FileName;
-  if (!fileName) {
-    throw new Error('The upload endpoint did not return a file path.');
-  }
-
-  return `/File/${fileName}`;
-}
-
-async function saveUserPhoto({ photo, file, mediaMode }) {
-  const resolvedPhoto = mediaMode === 'file' && file instanceof File && file.size > 0
-    ? await uploadFileToServer(file)
-    : String(photo || '').trim();
-
-  if (!resolvedPhoto) {
-    throw new Error('Please provide a photo link or choose a file.');
-  }
-  state.userPhotoUrl = resolvedPhoto;
-  writeStorage(`familyapp.userPhoto.${state.name}`, resolvedPhoto);
-  clearProtectedMediaCache();
   render();
-}
-
-async function saveItem(kind, itemId, { primary, mediaMode, image, file }) {
-  const isDish = kind === 'dishes';
-  const endpoint = isDish ? endpoints.dishes : endpoints.movies;
-  const photo = mediaMode === 'file' && file instanceof File && file.size > 0
-    ? await uploadFileToServer(file)
-    : String(image || '').trim();
-  const payload = { name: primary, photo };
-
-  if (!primary) {
-    throw new Error(`Please provide a ${isDish ? 'dish name' : 'movie title'}.`);
-  }
-
-  if (itemId) {
-    await apiRequest(`${endpoint}/${itemId}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
-  } else {
-    await apiRequest(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  }
-
-  if (isDish) {
-    state.dishesStatus = itemId ? 'Dish updated successfully.' : 'Dish added successfully.';
-  } else {
-    state.moviesStatus = itemId ? 'Movie updated successfully.' : 'Movie added successfully.';
-  }
-
-  await refreshProtectedData();
-}
-
-async function handleSaveItem(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const kind = form.getAttribute('data-add-form');
-  const formData = new FormData(form);
-  const primary = String(formData.get('primary') || '').trim();
-
-  if (!primary) {
-    return;
-  }
-
-  const isDish = kind === 'dishes';
-  const mediaMode = isDish ? state.dishMediaMode : state.movieMediaMode;
-  const file = formData.get('imageFile');
-  const image = String(formData.get('image') || '').trim();
-
-  try {
-    await saveItem(kind, '', { primary, mediaMode, image, file });
-
-    if (isDish) {
-      state.showDishForm = false;
-      state.editingDishId = '';
-      state.dishesView = 'all';
-    } else {
-      state.showMovieForm = false;
-      state.editingMovieId = '';
-      state.moviesView = 'all';
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (isDish) {
-      state.dishesStatus = `Unable to save dish. ${message}`;
-    } else {
-      state.moviesStatus = `Unable to save movie. ${message}`;
-    }
-    render();
-  }
-}
-
-async function handleEditorSave(kind, itemKey, payload) {
-  const item = findItemByKey(kind, itemKey);
-  const itemId = getItemId(item);
-  if (!item) {
-    throw new Error(`Unable to save ${kind === 'dishes' ? 'dish' : 'movie'}. The selected item was not found.`);
-  }
-  await saveItem(kind, itemId, payload);
-}
-
-async function handleDeleteItem(kind, itemKey, redirectAfterDelete = false) {
-  const isDish = kind === 'dishes';
-  const endpoint = isDish ? endpoints.dishes : endpoints.movies;
-  const item = findItemByKey(kind, itemKey);
-  const itemId = getItemId(item);
-
-  if (!item || !itemId) {
-    const message = `Unable to delete ${isDish ? 'dish' : 'movie'}. The selected item was not found.`;
-    if (isDish) {
-      state.dishesStatus = message;
-    } else {
-      state.moviesStatus = message;
-    }
-    render();
-    return;
-  }
-
-  try {
-    try {
-      await apiRequest(`${endpoint}/${itemId}`, { method: 'DELETE' });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes('404') && !message.toLowerCase().includes('not found')) {
-        throw error;
-      }
-    }
-    const refreshed = await apiRequest(endpoint).catch(() => []);
-    const itemStillExists = normalizeCollection(refreshed).some((entry) => getItemId(entry) === itemId);
-    if (itemStillExists) {
-      throw new Error('The backend reported delete success ambiguously, but the item is still present.');
-    }
-    if (isDish) {
-      state.dishesStatus = 'Dish deleted successfully.';
-      if (state.editingDishId === itemId) {
-        state.editingDishId = '';
-        state.showDishForm = false;
-      }
-    } else {
-      state.moviesStatus = 'Movie deleted successfully.';
-      if (state.editingMovieId === itemId) {
-        state.editingMovieId = '';
-        state.showMovieForm = false;
-      }
-    }
-    await refreshProtectedData();
-    if (redirectAfterDelete) {
-      state.editorContext = null;
-      navigate(isDish ? '/dishes' : '/movies');
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (isDish) {
-      state.dishesStatus = `Unable to delete dish. ${message}`;
-    } else {
-      state.moviesStatus = `Unable to delete movie. ${message}`;
-    }
-    render();
-  }
-}
-
-function openEditorPage(kind, itemKey, focusPhotoEditor = false) {
-  const item = findItemByKey(kind, itemKey);
-  if (!item) {
-    if (kind === 'dishes') {
-      state.dishesStatus = 'Unable to open editor. The selected dish was not found.';
-    } else {
-      state.moviesStatus = 'Unable to open editor. The selected movie was not found.';
-    }
-    render();
-    return;
-  }
-  state.editorContext = {
-    kind,
-    itemKey,
-    mediaMode: focusPhotoEditor ? 'file' : 'link',
-    primaryDraft: item?.name || '',
-    photoDraft: item?.photo || '',
-    status: '',
-  };
-  navigate('/editor');
 }
 
 async function handleEditorFormSubmit(event) {
@@ -1178,23 +972,42 @@ async function handleEditorFormSubmit(event) {
   if (!state.editorContext) {
     return;
   }
+
   const formData = new FormData(event.currentTarget);
-  const file = formData.get('imageFile');
   const primary = String(formData.get('primary') || '').trim();
+  const imageFile = formData.get('imageFile');
   const image = String(formData.get('image') || '').trim();
 
+  const { kind, itemKey } = state.editorContext;
+  const item = findItemByKey(kind, itemKey);
+  if (!item) {
+    return;
+  }
+
+  const id = getItemId(item);
+  const endpoint = `/${kind}/${id}`;
+  const body = { name: primary, photo: image };
+
   try {
-    await handleEditorSave(state.editorContext.kind, state.editorContext.itemKey, {
-      primary,
-      mediaMode: state.editorContext.mediaMode,
-      image,
-      file,
+    if (imageFile) {
+      const uploadResponse = await apiRequest('/File/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'multipart/form-data' },
+        body: formData,
+      });
+      body.photo = uploadResponse.filePath;
+    }
+
+    await apiRequest(endpoint, {
+      method: 'PUT',
+      body: JSON.stringify(body),
     });
-    const destination = state.editorContext.kind === 'dishes' ? '/dishes' : '/movies';
-    state.editorContext = null;
-    navigate(destination);
+
+    state.editorContext.status = 'Item updated.';
+    await refreshProtectedData();
+    render();
   } catch (error) {
-    state.editorContext.status = `Unable to save item. ${error instanceof Error ? error.message : String(error)}`;
+    state.editorContext.status = `Unable to update item. ${error.message}`;
     render();
   }
 }
@@ -1204,79 +1017,141 @@ async function handleProfileFormSubmit(event) {
   const formData = new FormData(event.currentTarget);
   const name = String(formData.get('name') || '').trim();
   const password = String(formData.get('password') || '').trim();
-  const file = formData.get('photoFile');
-  const photo = state.profileEditorMode === 'file' && file instanceof File && file.size > 0
-    ? await uploadFileToServer(file)
-    : String(formData.get('photo') || '').trim();
+  const photoFile = formData.get('photoFile');
+  const photo = String(formData.get('photo') || '').trim();
 
-  if (!name || !password) {
-    state.profileStatus = 'Unable to save profile. Name and password are required.';
+  try {
+    let photoPath = state.userPhotoUrl;
+    if (photoFile) {
+      const uploadResponse = await apiRequest('/File/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'multipart/form-data' },
+        body: formData,
+      });
+      photoPath = uploadResponse.filePath;
+    } else if (photo) {
+      photoPath = photo;
+    }
+
+    await apiRequest('/User/edit', {
+      method: 'PUT',
+      body: JSON.stringify({ name, password, photo: photoPath }),
+    });
+
+    state.profileStatus = 'Profile updated.';
+    state.name = name;
+    state.userPhotoUrl = photoPath;
+    writeStorage('familyapp.name', name);
+    writeStorage(`familyapp.userPhoto.${name}`, photoPath);
+    await refreshProtectedData();
     render();
+  } catch (error) {
+    state.profileStatus = `Unable to update profile. ${error.message}`;
+    render();
+  }
+}
+
+async function handleSaveItem(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const kind = form.getAttribute('data-add-form');
+  const formData = new FormData(form);
+  const primary = String(formData.get('primary') || '').trim();
+  const imageFile = formData.get('imageFile');
+  const image = String(formData.get('image') || '').trim();
+
+  const editingId = kind === 'dishes' ? state.editingDishId : state.editingMovieId;
+  const collection = getAllKnownItems(kind);
+  const item = editingId ? collection.find((entry) => getItemId(entry) === editingId) : null;
+
+  try {
+    let photoPath = image;
+    if (imageFile) {
+      const uploadResponse = await apiRequest('/File/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'multipart/form-data' },
+        body: formData,
+      });
+      photoPath = uploadResponse.filePath;
+    }
+
+    if (editingId && item) {
+      const id = getItemId(item);
+      await apiRequest(`/${kind}/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: primary, photo: photoPath }),
+      });
+    } else {
+      await apiRequest(`/${kind}`, {
+        method: 'POST',
+        body: JSON.stringify({ name: primary, photo: photoPath }),
+      });
+    }
+
+    if (kind === 'dishes') {
+      state.showDishForm = false;
+      state.editingDishId = '';
+    } else {
+      state.showMovieForm = false;
+      state.editingMovieId = '';
+    }
+
+    await refreshProtectedData();
+    render();
+  } catch (error) {
+    state.apiStatus = `Unable to save ${kind === 'dishes' ? 'dish' : 'movie'}. ${error.message}`;
+    render();
+  }
+}
+
+function openEditorPage(kind, itemKey, isPhotoEdit) {
+  const item = findItemByKey(kind, itemKey);
+  if (!item) {
+    return;
+  }
+
+  state.editorContext = {
+    kind,
+    itemKey,
+    primaryDraft: item.name,
+    photoDraft: isPhotoEdit ? null : item.photo,
+    mediaMode: isPhotoEdit ? 'file' : null,
+    status: '',
+  };
+  navigate('/editor');
+}
+
+async function handleDeleteItem(kind, itemKey, isEditor) {
+  const item = findItemByKey(kind, itemKey);
+  if (!item) {
+    return;
+  }
+
+  const id = getItemId(item);
+  if (!id) {
     return;
   }
 
   try {
-    await apiRequest('/User/edit', {
-      method: 'PUT',
-      body: JSON.stringify({ name, password, photo }),
-    });
-    await saveUserPhoto({ photo, file: null, mediaMode: 'link' });
-    state.profileStatus = 'Profile updated successfully.';
-    if (name !== state.name) {
-      writeStorage(`familyapp.userPhoto.${name}`, photo);
-      persistSession('', '');
-      state.authStatus = 'Profile updated. Please log in again with your new credentials.';
+    await apiRequest(`/${kind}/${id}`, { method: 'DELETE' });
+    if (isEditor) {
       navigate('/');
-      return;
     }
-    render();
+    await refreshProtectedData();
   } catch (error) {
-    state.profileStatus = `Unable to save profile. ${error instanceof Error ? error.message : String(error)}`;
-    render();
+    state.apiStatus = `Failed to delete item: ${error.message}`;
   }
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function escapeAttribute(value) {
-  return escapeHtml(value);
-}
-
-function renderFatalError(message) {
-  if (!app) {
-    return;
-  }
-
-  app.innerHTML = `
-    <div class="app-shell">
-      <section class="panel">
-        <span class="badge">Startup error</span>
-        <h1>FamilyApp could not start</h1>
-        <p class="message error">${escapeHtml(message)}</p>
-      </section>
-    </div>
-  `;
-}
-
-function bootstrap() {
-  if (!app) {
-    throw new Error('The #app container is missing from index.html.');
-  }
-
-  refreshProtectedData();
-  hydrateWelcomeMedia();
   render();
 }
 
-try {
-  bootstrap();
-} catch (error) {
-  renderFatalError(error instanceof Error ? error.message : String(error));
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
+
+function escapeAttribute(text) {
+  return escapeHtml(text).replace(/\'/g, '&#39;').replace(/\\/g, '&#92;').replace(/\`/g, '&#96;');
+}
+
+render();
