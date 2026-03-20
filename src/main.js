@@ -58,8 +58,6 @@ const state = {
   showMovieForm: false,
   dishMediaMode: 'link',
   movieMediaMode: 'link',
-  userPhotoMediaMode: 'link',
-  userPhotoStatus: '',
   editingDishId: '',
   editingMovieId: '',
 };
@@ -279,7 +277,18 @@ function normalizeSingleItem(payload) {
 }
 
 function getItemId(item) {
-  return item?.id || item?.Id || item?._id || '';
+  return (
+    item?.id ||
+    item?.Id ||
+    item?._id ||
+    item?.dishId ||
+    item?.DishId ||
+    item?.movieId ||
+    item?.MovieId ||
+    item?.itemId ||
+    item?.ItemId ||
+    ''
+  );
 }
 
 async function refreshProtectedData() {
@@ -351,16 +360,23 @@ function getAllKnownItems(kind) {
 
   const seen = new Map();
   collections.flat().forEach((item) => {
-    const itemId = getItemId(item);
-    if (itemId) {
-      seen.set(itemId, item);
-    }
+    seen.set(getItemKey(kind, item), item);
   });
   return Array.from(seen.values());
 }
 
-function findItemById(kind, itemId) {
-  return getAllKnownItems(kind).find((item) => getItemId(item) === itemId) || null;
+function getItemKey(kind, item) {
+  return [
+    kind,
+    getItemId(item) || '',
+    item?.name || item?.Name || item?.title || item?.Title || '',
+    item?.photo || item?.Photo || '',
+    item?.addedBy || item?.AddedBy || '',
+  ].join('::');
+}
+
+function findItemByKey(kind, itemKey) {
+  return getAllKnownItems(kind).find((item) => getItemKey(kind, item) === itemKey) || null;
 }
 
 function getAddedByPhotoPath(item) {
@@ -405,7 +421,7 @@ function pageTemplate(content) {
               </ul>
             </nav>
             <div class="topbar-actions">
-              <span class="user-pill">${renderUserIdentity(state.name || 'User')}</span>
+              <button class="user-pill" type="button" data-edit-user-photo="true">${renderUserIdentity(state.name || 'User')}</button>
               <button class="button ghost" data-action="logout">Logout</button>
             </div>`
           : '<span class="muted">Sign in to browse your family lists.</span>'}
@@ -448,28 +464,7 @@ function renderHome() {
             <button class="button primary" type="button" data-go-route="/dishes">Open dishes</button>
             <button class="button ghost" type="button" data-go-route="/movies">Open movies</button>
           </div>
-          <hr />
-          <form class="stack" id="user-photo-form">
-            <div>
-              <strong>Edit your photo</strong>
-              <p class="muted small-text">Choose a direct link or upload a file, then save it to your profile.</p>
-            </div>
-            <div class="media-mode-switch">
-              <button class="tab-button ${state.userPhotoMediaMode === 'link' ? 'active' : ''}" type="button" data-user-photo-mode="link">Use link</button>
-              <button class="tab-button ${state.userPhotoMediaMode === 'file' ? 'active' : ''}" type="button" data-user-photo-mode="file">Upload file</button>
-            </div>
-            ${state.userPhotoMediaMode === 'file'
-              ? `<label>
-                  Profile photo
-                  <input name="photoFile" type="file" accept="image/*" />
-                </label>`
-              : `<label>
-                  Photo URL
-                  <input name="photoUrl" type="url" placeholder="https://example.com/profile.jpg" value="${escapeAttribute(state.userPhotoUrl)}" />
-                </label>`}
-            <button class="button primary" type="submit">Save photo</button>
-            ${state.userPhotoStatus ? `<p class="message ${state.userPhotoStatus.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(state.userPhotoStatus)}</p>` : ''}
-          </form>
+          <p class="muted small-text">To edit your profile photo, click your profile in the top-right corner.</p>
         </section>
       </section>
     `);
@@ -602,18 +597,18 @@ function renderMediaList({ kind, items, itemField, imageField, emptyText }) {
           const title = item[itemField] || 'Untitled';
           const image = resolveMediaUrl(item[imageField]);
           const addedBy = item.addedBy || item.AddedBy ? renderAddedBy(item) : '';
-          const itemId = getItemId(item);
+          const itemKey = getItemKey(kind, item);
           return `
             <li class="media-row">
-              <button class="thumb-shell thumb-button" type="button" data-edit-kind="${kind}" data-item-id="${escapeAttribute(itemId)}" data-photo-edit="true">
+              <button class="thumb-shell thumb-button" type="button" data-edit-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}" data-photo-edit="true">
                 ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(title)}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
               </button>
               <div class="media-copy">
                 <strong>${escapeHtml(title)}</strong>
                 ${addedBy}
                 <div class="row-actions">
-                  <button class="button secondary" type="button" data-edit-kind="${kind}" data-item-id="${escapeAttribute(itemId)}">Edit</button>
-                  <button class="button danger" type="button" data-delete-kind="${kind}" data-item-id="${escapeAttribute(itemId)}">Delete</button>
+                  <button class="button secondary" type="button" data-edit-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}">Edit</button>
+                  <button class="button danger" type="button" data-delete-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}">Delete</button>
                 </div>
               </div>
             </li>
@@ -692,11 +687,6 @@ function render() {
     authForm.addEventListener('submit', handleAuthSubmit);
   }
 
-  const userPhotoForm = document.querySelector('#user-photo-form');
-  if (userPhotoForm) {
-    userPhotoForm.addEventListener('submit', handleUserPhotoSubmit);
-  }
-
   document.querySelectorAll('[data-view-kind]').forEach((button) => {
     button.addEventListener('click', async () => {
       const kind = button.getAttribute('data-view-kind');
@@ -712,14 +702,6 @@ function render() {
           state.randomMovie = normalizeSingleItem(await apiRequest(endpoints.randomMovie).catch(() => state.randomMovie));
         }
       }
-      render();
-    });
-  });
-
-  document.querySelectorAll('[data-user-photo-mode]').forEach((button) => {
-    button.addEventListener('click', () => {
-      state.userPhotoMediaMode = button.getAttribute('data-user-photo-mode') || 'link';
-      state.userPhotoStatus = '';
       render();
     });
   });
@@ -751,19 +733,25 @@ function render() {
     });
   });
 
+  document.querySelectorAll('[data-edit-user-photo]').forEach((button) => {
+    button.addEventListener('click', () => {
+      openUserPhotoEditor();
+    });
+  });
+
   document.querySelectorAll('[data-edit-kind]').forEach((button) => {
     button.addEventListener('click', () => {
       const kind = button.getAttribute('data-edit-kind');
-      const itemId = button.getAttribute('data-item-id') || '';
-      openEditorWindow(kind || '', itemId, button.hasAttribute('data-photo-edit'));
+      const itemKey = button.getAttribute('data-item-key') || '';
+      openEditorWindow(kind || '', itemKey, button.hasAttribute('data-photo-edit'));
     });
   });
 
   document.querySelectorAll('[data-delete-kind]').forEach((button) => {
     button.addEventListener('click', async () => {
       const kind = button.getAttribute('data-delete-kind');
-      const itemId = button.getAttribute('data-item-id') || '';
-      await handleDeleteItem(kind || '', itemId);
+      const itemKey = button.getAttribute('data-item-key') || '';
+      await handleDeleteItem(kind || '', itemKey);
     });
   });
 
@@ -864,32 +852,20 @@ async function updateUserPhoto(photo) {
   throw lastError || new Error('Unable to update user photo.');
 }
 
-async function handleUserPhotoSubmit(event) {
-  event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const file = formData.get('photoFile');
-  const photo = state.userPhotoMediaMode === 'file' && file instanceof File && file.size > 0
+async function saveUserPhoto({ photo, file, mediaMode }) {
+  const resolvedPhoto = mediaMode === 'file' && file instanceof File && file.size > 0
     ? await uploadFileToServer(file)
-    : String(formData.get('photoUrl') || '').trim();
+    : String(photo || '').trim();
 
-  if (!photo) {
-    state.userPhotoStatus = 'Unable to save photo. Please provide a photo link or choose a file.';
-    render();
-    return;
+  if (!resolvedPhoto) {
+    throw new Error('Please provide a photo link or choose a file.');
   }
 
-  try {
-    await updateUserPhoto(photo);
-    state.userPhotoStatus = 'Profile photo updated successfully.';
-    state.userPhotoUrl = photo;
-    clearProtectedMediaCache();
-    await hydrateWelcomeMedia();
-    await refreshProtectedData();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    state.userPhotoStatus = `Unable to save photo. ${message}`;
-    render();
-  }
+  await updateUserPhoto(resolvedPhoto);
+  state.userPhotoUrl = resolvedPhoto;
+  clearProtectedMediaCache();
+  await hydrateWelcomeMedia();
+  await refreshProtectedData();
 }
 
 async function saveItem(kind, itemId, { primary, mediaMode, image, file }) {
@@ -961,17 +937,31 @@ async function handleSaveItem(event) {
   }
 }
 
-async function handleEditorSave(kind, itemId, payload) {
+async function handleEditorSave(kind, itemKey, payload) {
+  const item = findItemByKey(kind, itemKey);
+  const itemId = getItemId(item);
+  if (!item) {
+    throw new Error(`Unable to save ${kind === 'dishes' ? 'dish' : 'movie'}. The selected item was not found.`);
+  }
   await saveItem(kind, itemId, payload);
 }
 
-async function handleDeleteItem(kind, itemId) {
-  if (!itemId) {
-    return;
-  }
-
+async function handleDeleteItem(kind, itemKey) {
   const isDish = kind === 'dishes';
   const endpoint = isDish ? endpoints.dishes : endpoints.movies;
+  const item = findItemByKey(kind, itemKey);
+  const itemId = getItemId(item);
+
+  if (!item || !itemId) {
+    const message = `Unable to delete ${isDish ? 'dish' : 'movie'}. The selected item was not found.`;
+    if (isDish) {
+      state.dishesStatus = message;
+    } else {
+      state.moviesStatus = message;
+    }
+    render();
+    return;
+  }
 
   try {
     await apiRequest(`${endpoint}/${itemId}`, { method: 'DELETE' });
@@ -1000,8 +990,8 @@ async function handleDeleteItem(kind, itemId) {
   }
 }
 
-function openEditorWindow(kind, itemId, focusPhotoEditor = false) {
-  const item = findItemById(kind, itemId);
+function openEditorWindow(kind, itemKey, focusPhotoEditor = false) {
+  const item = findItemByKey(kind, itemKey);
   if (!item) {
     if (kind === 'dishes') {
       state.dishesStatus = 'Unable to open editor. The selected dish was not found.';
@@ -1015,7 +1005,7 @@ function openEditorWindow(kind, itemId, focusPhotoEditor = false) {
   const title = item?.name || item?.title || '';
   const photoPath = item?.photo || '';
   const photoPreview = resolveMediaUrl(photoPath);
-  const popup = window.open('', `${kind}-${itemId}`, 'width=620,height=760');
+  const popup = window.open('', `${kind}-${encodeURIComponent(itemKey)}`, 'width=620,height=760');
 
   if (!popup) {
     if (kind === 'dishes') {
@@ -1029,7 +1019,7 @@ function openEditorWindow(kind, itemId, focusPhotoEditor = false) {
 
   const serializedItem = JSON.stringify({
     kind,
-    itemId,
+    itemKey,
     title,
     photoPath,
     photoPreview,
@@ -1152,7 +1142,7 @@ function openEditorWindow(kind, itemId, focusPhotoEditor = false) {
           if (!window.confirm('Delete this item?')) return;
           status.textContent = 'Deleting...';
           try {
-            await window.opener.__familyAppDeleteItem(initialData.kind, initialData.itemId);
+            await window.opener.__familyAppDeleteItem(initialData.kind, initialData.itemKey);
             window.close();
           } catch (error) {
             status.textContent = error instanceof Error ? error.message : String(error);
@@ -1161,7 +1151,7 @@ function openEditorWindow(kind, itemId, focusPhotoEditor = false) {
         document.getElementById('saveButton').addEventListener('click', async () => {
           status.textContent = 'Saving...';
           try {
-            await window.opener.__familyAppSaveEditor(initialData.kind, initialData.itemId, {
+            await window.opener.__familyAppSaveEditor(initialData.kind, initialData.itemKey, {
               primary: titleInput.value.trim(),
               mediaMode,
               image: imageInput.value.trim(),
@@ -1179,8 +1169,122 @@ function openEditorWindow(kind, itemId, focusPhotoEditor = false) {
   popup.focus();
 }
 
+function openUserPhotoEditor() {
+  const popup = window.open('', 'user-photo-editor', 'width=520,height=640');
+  if (!popup) {
+    state.apiStatus = 'Unable to open the profile photo editor. Please allow pop-ups for this site.';
+    render();
+    return;
+  }
+
+  const serialized = JSON.stringify({
+    currentPhoto: state.userPhotoUrl || '',
+    previewPhoto: resolveMediaUrl(state.userPhotoUrl),
+  }).replace(/</g, '\\u003c');
+
+  popup.document.open();
+  popup.document.write(`<!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <title>Edit profile photo</title>
+      <style>
+        body { font-family: Inter, Arial, sans-serif; margin: 0; background: #081120; color: #f5f7ff; }
+        .shell { max-width: 520px; margin: 0 auto; padding: 24px; display: grid; gap: 18px; }
+        .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 18px; display: grid; gap: 14px; }
+        .preview { width: 100%; min-height: 240px; border-radius: 18px; border: 1px dashed rgba(255,255,255,0.18); display: grid; place-items: center; overflow: hidden; background: #0b1426; color: #c5d0f5; }
+        .preview img { width: 100%; height: 240px; object-fit: cover; display: block; }
+        .row { display: flex; gap: 12px; }
+        .row > button { flex: 1; }
+        .hidden { display: none; }
+        input { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: #0e1830; color: #fff; }
+        button { border: 0; border-radius: 12px; padding: 12px 16px; cursor: pointer; font: inherit; }
+        .primary { background: linear-gradient(135deg, #5a7dff 0%, #8f67ff 100%); color: #fff; }
+        .secondary { background: rgba(255,255,255,0.1); color: #fff; }
+        .status { min-height: 1.4em; color: #b7c2ea; }
+      </style>
+    </head>
+    <body>
+      <div class="shell">
+        <div class="card">
+          <h1 style="margin:0;">Edit profile photo</h1>
+          <button id="preview" class="preview" type="button">No photo selected</button>
+          <div class="row">
+            <button id="modeLink" class="secondary" type="button">Use link</button>
+            <button id="modeFile" class="secondary" type="button">Upload file</button>
+          </div>
+          <label id="linkWrap">
+            <span>Photo URL</span>
+            <input id="imageInput" type="url" />
+          </label>
+          <label id="fileWrap" class="hidden">
+            <span>Photo file</span>
+            <input id="fileInput" type="file" accept="image/*" />
+          </label>
+          <p id="status" class="status"></p>
+          <div class="row">
+            <button id="saveButton" class="primary" type="button">Save photo</button>
+            <button id="closeButton" class="secondary" type="button">Close</button>
+          </div>
+        </div>
+      </div>
+      <script>
+        const initialData = ${serialized};
+        let mediaMode = 'link';
+        const preview = document.getElementById('preview');
+        const imageInput = document.getElementById('imageInput');
+        const fileInput = document.getElementById('fileInput');
+        const linkWrap = document.getElementById('linkWrap');
+        const fileWrap = document.getElementById('fileWrap');
+        const status = document.getElementById('status');
+        const renderPreview = (url) => {
+          preview.innerHTML = url ? '<img src="' + url.replace(/"/g, '&quot;') + '" alt="Profile preview" />' : 'No photo selected';
+        };
+        const setMode = (nextMode) => {
+          mediaMode = nextMode;
+          linkWrap.classList.toggle('hidden', nextMode !== 'link');
+          fileWrap.classList.toggle('hidden', nextMode !== 'file');
+        };
+        imageInput.value = initialData.currentPhoto || '';
+        renderPreview(initialData.previewPhoto || '');
+        setMode('link');
+        document.getElementById('modeLink').addEventListener('click', () => { setMode('link'); imageInput.focus(); });
+        document.getElementById('modeFile').addEventListener('click', () => { setMode('file'); fileInput.click(); });
+        preview.addEventListener('click', () => {
+          if (mediaMode === 'file') fileInput.click();
+          else imageInput.focus();
+        });
+        imageInput.addEventListener('input', () => {
+          if (mediaMode === 'link') renderPreview(imageInput.value.trim());
+        });
+        fileInput.addEventListener('change', () => {
+          const file = fileInput.files && fileInput.files[0];
+          if (file) renderPreview(URL.createObjectURL(file));
+        });
+        document.getElementById('closeButton').addEventListener('click', () => window.close());
+        document.getElementById('saveButton').addEventListener('click', async () => {
+          status.textContent = 'Saving...';
+          try {
+            await window.opener.__familyAppSaveUserPhoto({
+              photo: imageInput.value.trim(),
+              file: fileInput.files && fileInput.files[0] ? fileInput.files[0] : null,
+              mediaMode,
+            });
+            window.close();
+          } catch (error) {
+            status.textContent = error instanceof Error ? error.message : String(error);
+          }
+        });
+      <\/script>
+    </body>
+  </html>`);
+  popup.document.close();
+  popup.focus();
+}
+
 window.__familyAppSaveEditor = handleEditorSave;
 window.__familyAppDeleteItem = handleDeleteItem;
+window.__familyAppSaveUserPhoto = saveUserPhoto;
 
 function escapeHtml(value) {
   return String(value)

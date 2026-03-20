@@ -43,7 +43,7 @@ Supported backend functions in the UI:
 
 ## Notes
 - The home page greets logged-in users with `Hi, user!`, renders the logged-in user photo from `/User/Photo`, and shows the hello video from `/File/GetVideo`.
-- The top bar shows the logged-in user photo, the home page now includes a profile-photo editor with both link and file-upload modes, and `addedBy` renders an avatar for every item when the backend provides one.
+- The top bar shows the logged-in user photo, clicking that top-right profile control opens the profile-photo editor, and `addedBy` renders an avatar for every item when the backend provides one.
 - Movie items now use the same `name` / `photo` fields as dishes.
 - Item create/edit forms now support both a direct link and a local file upload. Local files are uploaded to `/File/upload`, and the returned file path is what gets stored in the item payload.
 - Stored file paths are rendered through the authorized `GET /File/{filePath}` endpoint, so the frontend fetches protected files with the JWT token and displays them via browser blob URLs.
