@@ -57,6 +57,8 @@ const state = {
   moviesView: 'all',
   showDishForm: false,
   showMovieForm: false,
+  dishMediaMode: 'link',
+  movieMediaMode: 'link',
   editingDishId: '',
   editingMovieId: '',
 };
@@ -296,6 +298,17 @@ function currentSectionItems(kind) {
   return allItems;
 }
 
+function renderUserIdentity(name) {
+  return `
+    <span class="user-mini">
+      ${state.userPhotoUrl
+        ? `<img class="user-mini-photo" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
+        : `<span class="user-mini-photo user-mini-fallback">${escapeHtml(name.slice(0, 1).toUpperCase())}</span>`}
+      <span>${escapeHtml(name)}</span>
+    </span>
+  `;
+}
+
 function pageTemplate(content) {
   return `
     <div class="app-shell">
@@ -310,7 +323,7 @@ function pageTemplate(content) {
               </ul>
             </nav>
             <div class="topbar-actions">
-              <span class="user-pill">${escapeHtml(state.name || 'User')}</span>
+              <span class="user-pill">${renderUserIdentity(state.name || 'User')}</span>
               <button class="button ghost" data-action="logout">Logout</button>
             </div>`
           : '<span class="muted">Sign in to browse your family lists.</span>'}
@@ -328,7 +341,7 @@ function renderHome() {
           <span class="badge">Welcome back</span>
           <h1>Hi, ${escapeHtml(state.name || 'friend')}!</h1>
           <div class="welcome-media">
-            ${state.helloVideoUrl ? `<video class="hello-video" src="${escapeAttribute(state.helloVideoUrl)}" controls autoplay muted loop playsinline></video>` : `<div class="empty-state">Welcome video is not available.</div>`}
+            ${state.helloVideoUrl ? `<video class="hello-video" src="${escapeAttribute(state.helloVideoUrl)}" controls autoplay loop playsinline></video>` : `<div class="empty-state">Welcome video is not available.</div>`}
             <div class="profile-card">
               ${state.userPhotoUrl
                 ? `<img class="profile-photo" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
@@ -393,6 +406,7 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
   const view = kind === 'dishes' ? state.dishesView : state.moviesView;
   const showForm = kind === 'dishes' ? state.showDishForm : state.showMovieForm;
   const editingId = kind === 'dishes' ? state.editingDishId : state.editingMovieId;
+  const mediaMode = kind === 'dishes' ? state.dishMediaMode : state.movieMediaMode;
   const items = currentSectionItems(kind);
   const ownItems = kind === 'dishes' ? state.myDishes : state.myMovies;
 
@@ -423,10 +437,19 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
               ${title === 'Dishes' ? 'Dish name' : 'Movie title'}
               <input name="primary" type="text" placeholder="${inputPlaceholder}" value="${escapeAttribute(getEditingValue(kind, itemField))}" required />
             </label>
-            <label>
-              ${imageLabel}
-              <input name="image" type="url" placeholder="${imagePlaceholder}" value="${escapeAttribute(getEditingValue(kind, imageField))}" />
-            </label>
+            <div class="media-mode-switch">
+              <button class="tab-button ${mediaMode === 'link' ? 'active' : ''}" type="button" data-media-mode-kind="${kind}" data-media-mode="link">Use link</button>
+              <button class="tab-button ${mediaMode === 'file' ? 'active' : ''}" type="button" data-media-mode-kind="${kind}" data-media-mode="file">Upload file</button>
+            </div>
+            ${mediaMode === 'file'
+              ? `<label>
+                  ${imageLabel}
+                  <input name="imageFile" type="file" accept="image/*,video/*" />
+                </label>`
+              : `<label>
+                  ${imageLabel}
+                  <input name="image" type="url" placeholder="${imagePlaceholder}" value="${escapeAttribute(getEditingValue(kind, imageField))}" />
+                </label>`}
             <button class="button primary" type="submit">${editingId ? 'Save changes' : 'Save'}</button>
           </form>
         ` : ''}
@@ -568,6 +591,19 @@ function render() {
     });
   });
 
+  document.querySelectorAll('[data-media-mode-kind]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const kind = button.getAttribute('data-media-mode-kind');
+      const mode = button.getAttribute('data-media-mode') || 'link';
+      if (kind === 'dishes') {
+        state.dishMediaMode = mode;
+      } else {
+        state.movieMediaMode = mode;
+      }
+      render();
+    });
+  });
+
   document.querySelectorAll('[data-toggle-form]').forEach((button) => {
     button.addEventListener('click', () => {
       const kind = button.getAttribute('data-toggle-form');
@@ -590,10 +626,12 @@ function render() {
         state.editingDishId = itemId;
         state.showDishForm = true;
         state.dishesView = 'mine';
+        state.dishMediaMode = 'link';
       } else {
         state.editingMovieId = itemId;
         state.showMovieForm = true;
         state.moviesView = 'mine';
+        state.movieMediaMode = 'link';
       }
       render();
     });
@@ -659,13 +697,21 @@ async function handleAuthSubmit(event) {
   }
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Unable to read the selected file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function handleSaveItem(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const kind = form.getAttribute('data-add-form');
   const formData = new FormData(form);
   const primary = String(formData.get('primary') || '').trim();
-  const image = String(formData.get('image') || '').trim();
 
   if (!primary) {
     return;
@@ -673,6 +719,11 @@ async function handleSaveItem(event) {
 
   const isDish = kind === 'dishes';
   const endpoint = isDish ? endpoints.dishes : endpoints.movies;
+  const mediaMode = isDish ? state.dishMediaMode : state.movieMediaMode;
+  const file = formData.get('imageFile');
+  const image = mediaMode === 'file' && file instanceof File && file.size > 0
+    ? await readFileAsDataUrl(file)
+    : String(formData.get('image') || '').trim();
   const payload = isDish ? { name: primary, photo: image } : { title: primary, poster: image };
   const editingId = isDish ? state.editingDishId : state.editingMovieId;
 

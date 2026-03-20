@@ -1,6 +1,6 @@
 # FamilyApp
 
-FamilyApp is a GitHub Pages frontend for the public FamilyApi backend. TEST
+FamilyApp is a GitHub Pages frontend for the public FamilyApi backend.
 
 ## Stack
 - HTML + CSS + Vanilla JavaScript
@@ -41,7 +41,9 @@ Supported backend functions in the UI:
 
 ## Notes
 - The home page greets logged-in users with `Hi, user!`, shows the welcome video first, and then renders the logged-in user photo using a `data:image/png;base64,` prefix when `/User/Photo` returns an inline base64 string.
-- The frontend now explicitly calls `video.play()` after render to maximize the chance of autoplay, although some browsers may still require a user gesture for unmuted playback.
+- The top bar now also shows the logged-in user photo anywhere the user identity is displayed.
+- Item create/edit forms now support both a direct link and a local file upload; local files are read in the browser before being sent in the request payload.
+- The frontend explicitly calls `video.play()` after render to maximize the chance of autoplay, although some browsers may still require a user gesture for unmuted playback.
 - The app now uses the current lowercase `/my` routes from `FamilyApi`.
 - Edit is implemented in the frontend as a replace flow: delete the owned item and create the updated version with the new values.
 - Delete and edit actions are shown only for items owned by the logged-in user.

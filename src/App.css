@@ -442,3 +442,34 @@ code {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #030812;
 }
+
+
+.user-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-mini-photo {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  object-fit: cover;
+  display: block;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.user-mini-fallback {
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, #4883ff 0%, #7b61ff 100%);
+}
+
+.media-mode-switch {
+  display: inline-flex;
+  gap: 8px;
+  margin-top: 4px;
+}
