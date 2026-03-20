@@ -1135,8 +1135,10 @@ async function handleDeleteItem(kind, itemKey, isEditor) {
   console.log(id2);
   console.log(item.id);
   console.log(item.id.toString());
-  console.log(item.id.toHexString());
+  const id4 = String(item.id);
+  console.log(id4);
   console.log(String(item.id));
+  
   if (!id) {
     return;
   }
