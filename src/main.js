@@ -1,0 +1,1282 @@
+const API_BASE_URL = 'https://mivvea.runasp.net';
+const endpoints = {
+  login: '/User/login',
+  register: '/User/register',
+  dishes: '/Dishes',
+  myDishes: '/Dishes/my',
+  randomDish: '/Dishes/random',
+  movies: '/Movies',
+  myMovies: '/Movies/my',
+  randomMovie: '/Movies/random',
+};
+
+const app = document.querySelector('#app');
+
+function readStorage(key) {
+  try {
+    return window.localStorage.getItem(key) || '';
+  } catch {
+    return '';
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Keep the UI usable even when storage is blocked.
+  }
+}
+
+function removeStorage(key) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Keep the UI usable even when storage is blocked.
+  }
+}
+
+const initialStoredName = readStorage('familyapp.name');
+
+const state = {
+  route: window.location.hash.replace(/^#/, '') || '/',
+  authMode: 'login',
+  name: initialStoredName,
+  authToken: readStorage('familyapp.authToken'),
+  authStatus: '',
+  apiStatus: '',
+  userPhotoUrl: readStorage(`familyapp.userPhoto.${initialStoredName}`),
+  dishes: [],
+  myDishes: [],
+  randomDish: null,
+  movies: [],
+  myMovies: [],
+  randomMovie: null,
+  dishesStatus: '',
+  moviesStatus: '',
+  dishesView: 'all',
+  moviesView: 'all',
+  showDishForm: false,
+  showMovieForm: false,
+  dishMediaMode: 'link',
+  movieMediaMode: 'link',
+  editingDishId: '',
+  editingMovieId: '',
+  editorContext: null,
+  profileEditorMode: 'link',
+  profileStatus: '',
+};
+
+const routes = {
+  '/': renderHome,
+  '/dishes': renderDishesPage,
+  '/movies': renderMoviesPage,
+  '/editor': renderEditorPage,
+  '/profile': renderProfilePage,
+};
+
+const protectedMediaCache = new Map();
+const pendingProtectedMedia = new Map();
+
+function isSignedIn() {
+  return Boolean(state.authToken);
+}
+
+function navigate(route) {
+  window.location.hash = route;
+}
+
+window.addEventListener('hashchange', () => {
+  state.route = window.location.hash.replace(/^#/, '') || '/';
+  render();
+});
+
+function ensureProtectedRoute() {
+  if (!isSignedIn() && state.route !== '/') {
+    state.route = '/';
+    window.location.hash = '/';
+  }
+}
+
+function getHeaders(extraHeaders = {}) {
+  return {
+    'Content-Type': 'application/json',
+    ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {}),
+    ...extraHeaders,
+  };
+}
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: getHeaders(options.headers),
+    ...options,
+  });
+
+  const text = await response.text();
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
+
+  if (!response.ok) {
+    const message =
+      (typeof data === 'object' && (data?.Message || data?.message || data?.title || data?.error)) ||
+      (typeof data === 'string' && data) ||
+      `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+
+  state.apiStatus = `Connected to ${path}`;
+  return data;
+}
+
+function persistSession(token, name) {
+  if (state.authToken !== token) {
+    clearProtectedMediaCache();
+  }
+
+  state.authToken = token || '';
+  state.name = name || '';
+
+  if (token) {
+    writeStorage('familyapp.authToken', token);
+    writeStorage('familyapp.name', name || '');
+  } else {
+    removeStorage('familyapp.authToken');
+    removeStorage('familyapp.name');
+  }
+}
+
+function normalizeCollection(payload) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload?.items)) {
+    return payload.items;
+  }
+
+  if (Array.isArray(payload?.$values)) {
+    return payload.$values;
+  }
+
+  return [];
+}
+
+function extractPathValue(payload) {
+  if (typeof payload === 'string') {
+    return payload.trim();
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  return String(
+    payload.filePath ||
+    payload.FilePath ||
+    payload.path ||
+    payload.Path ||
+    payload.photo ||
+    payload.Photo ||
+    payload.url ||
+    payload.Url ||
+    '',
+  ).trim();
+}
+
+function clearProtectedMediaCache() {
+  protectedMediaCache.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+  protectedMediaCache.clear();
+  pendingProtectedMedia.clear();
+}
+
+async function fetchProtectedMedia(cacheKey, requestUrl) {
+  if (!isSignedIn() || !cacheKey || protectedMediaCache.has(cacheKey) || pendingProtectedMedia.has(cacheKey)) {
+    return;
+  }
+
+  const request = fetch(requestUrl, {
+    headers: state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {},
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const previousUrl = protectedMediaCache.get(cacheKey);
+      if (previousUrl) {
+        URL.revokeObjectURL(previousUrl);
+      }
+
+      protectedMediaCache.set(cacheKey, URL.createObjectURL(blob));
+      render();
+    })
+    .catch(() => {
+      // Keep the existing placeholder UI when protected media cannot be loaded.
+    })
+    .finally(() => {
+      pendingProtectedMedia.delete(cacheKey);
+    });
+
+  pendingProtectedMedia.set(cacheKey, request);
+  await request;
+}
+
+function resolveProtectedEndpointUrl(cacheKey, requestUrl) {
+  if (!cacheKey || !requestUrl) {
+    return '';
+  }
+
+  const cachedUrl = protectedMediaCache.get(cacheKey);
+  if (cachedUrl) {
+    return cachedUrl;
+  }
+
+  void fetchProtectedMedia(cacheKey, requestUrl);
+  return '';
+}
+
+function resolveMediaUrl(value) {
+  const path = extractPathValue(value);
+  if (!path) {
+    return '';
+  }
+
+  if (/^(data:|blob:|https?:\/\/)/i.test(path)) {
+    return path;
+  }
+
+  if (/^\/?File\/GetVideo$/i.test(path)) {
+    return resolveProtectedEndpointUrl(path, `${API_BASE_URL}/${path.replace(/^\/+/, '')}`);
+  }
+
+  if (/^\/?File\//i.test(path)) {
+    return resolveProtectedEndpointUrl(path, `${API_BASE_URL}/${path.replace(/^\/+/, '')}`);
+  }
+
+  return resolveProtectedEndpointUrl(path, `${API_BASE_URL}/File/${encodeURIComponent(path)}`);
+}
+
+async function hydrateWelcomeMedia() {
+  if (!isSignedIn()) {
+    state.userPhotoUrl = '';
+    return;
+  }
+  render();
+}
+
+function normalizeSingleItem(payload) {
+  if (!payload || Array.isArray(payload)) {
+    return null;
+  }
+
+  return typeof payload === 'object' ? payload : null;
+}
+
+function getItemId(item) {
+  return (
+    item?.id ||
+    item?.Id ||
+    item?._id ||
+    item?.dishId ||
+    item?.DishId ||
+    item?.movieId ||
+    item?.MovieId ||
+    item?.itemId ||
+    item?.ItemId ||
+    ''
+  );
+}
+
+async function refreshProtectedData() {
+  if (!isSignedIn()) {
+    state.dishes = [];
+    state.myDishes = [];
+    state.randomDish = null;
+    state.movies = [];
+    state.myMovies = [];
+    state.randomMovie = null;
+    state.dishesStatus = '';
+    state.moviesStatus = '';
+    render();
+    return;
+  }
+
+  state.dishesStatus = 'Loading dishes...';
+  state.moviesStatus = 'Loading movies...';
+  render();
+
+  try {
+    const [dishes, myDishes, randomDish, movies, myMovies, randomMovie] = await Promise.all([
+      apiRequest(endpoints.dishes),
+      apiRequest(endpoints.myDishes).catch((error) => ({ error: error.message })),
+      apiRequest(endpoints.randomDish).catch(() => null),
+      apiRequest(endpoints.movies),
+      apiRequest(endpoints.myMovies).catch((error) => ({ error: error.message })),
+      apiRequest(endpoints.randomMovie).catch(() => null),
+    ]);
+
+    state.dishes = normalizeCollection(dishes);
+    state.myDishes = normalizeCollection(myDishes);
+    state.randomDish = normalizeSingleItem(randomDish);
+    state.movies = normalizeCollection(movies);
+    state.myMovies = normalizeCollection(myMovies);
+    state.randomMovie = normalizeSingleItem(randomMovie);
+    state.dishesStatus = myDishes?.error ? `All dishes loaded. ${myDishes.error}` : '';
+    state.moviesStatus = myMovies?.error ? `All movies loaded. ${myMovies.error}` : '';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    state.dishesStatus = `Unable to load dishes. ${message}`;
+    state.moviesStatus = `Unable to load movies. ${message}`;
+  }
+
+  render();
+}
+
+function currentSectionItems(kind) {
+  const allItems = kind === 'dishes' ? state.dishes : state.movies;
+  const myItems = kind === 'dishes' ? state.myDishes : state.myMovies;
+  const randomItem = kind === 'dishes' ? state.randomDish : state.randomMovie;
+  const view = kind === 'dishes' ? state.dishesView : state.moviesView;
+
+  if (view === 'mine') {
+    return myItems;
+  }
+
+  if (view === 'random') {
+    return randomItem ? [randomItem] : [];
+  }
+
+  return allItems;
+}
+
+function getAllKnownItems(kind) {
+  const collections = kind === 'dishes'
+    ? [state.dishes, state.myDishes, state.randomDish ? [state.randomDish] : []]
+    : [state.movies, state.myMovies, state.randomMovie ? [state.randomMovie] : []];
+
+  const seen = new Map();
+  collections.flat().forEach((item) => {
+    seen.set(getItemKey(kind, item), item);
+  });
+  return Array.from(seen.values());
+}
+
+function getItemKey(kind, item) {
+  return [
+    kind,
+    getItemId(item) || '',
+    item?.name || item?.Name || item?.title || item?.Title || '',
+    item?.photo || item?.Photo || '',
+    item?.addedBy || item?.AddedBy || '',
+  ].join('::');
+}
+
+function findItemByKey(kind, itemKey) {
+  return getAllKnownItems(kind).find((item) => getItemKey(kind, item) === itemKey) || null;
+}
+
+function getAddedByPhotoPath(item) {
+  return extractPathValue(
+    item?.addedByPhoto ||
+    item?.AddedByPhoto ||
+    item?.userPhoto ||
+    item?.UserPhoto ||
+    item?.addedByUserPhoto ||
+    item?.AddedByUserPhoto ||
+    item?.addedByPhotoPath ||
+    item?.AddedByPhotoPath ||
+    item?.user?.photo ||
+    item?.User?.Photo ||
+    '',
+  );
+}
+
+function renderUserIdentity(name) {
+  const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
+  return `
+    <span class="user-mini">
+      ${userPhotoUrl
+        ? `<img class="user-mini-photo" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
+        : `<span class="user-mini-photo user-mini-fallback">${escapeHtml(name.slice(0, 1).toUpperCase())}</span>`}
+      <span>${escapeHtml(name)}</span>
+    </span>
+  `;
+}
+
+function pageTemplate(content) {
+  return `
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#/">FamilyApp</a>
+        ${isSignedIn()
+          ? `
+            <nav>
+              <ul class="nav-list">
+                <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes">Dishes</a></li>
+                <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies">Movies</a></li>
+              </ul>
+            </nav>
+            <div class="topbar-actions">
+              <button class="user-pill" type="button" data-edit-user-photo="true">${renderUserIdentity(state.name || 'User')}</button>
+              <button class="button ghost" data-action="logout">Logout</button>
+            </div>`
+          : '<span class="muted">Sign in to browse your family lists.</span>'}
+      </header>
+      <main class="page-content">${content}</main>
+    </div>
+  `;
+}
+
+function renderHome() {
+  if (isSignedIn()) {
+    const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
+    const helloVideoUrl = resolveProtectedEndpointUrl('__hello_video__', `${API_BASE_URL}/File/GetVideo`);
+    return pageTemplate(`
+      <section class="panel auth-layout">
+        <div>
+          <span class="badge">Welcome back</span>
+          <h1>Hi, ${escapeHtml(state.name || 'friend')}!</h1>
+          <div class="welcome-media">
+            <div class="profile-card profile-card-large">
+              ${userPhotoUrl
+                ? `<img class="profile-photo profile-photo-large" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
+                : `<div class="profile-photo profile-photo-large profile-fallback">${escapeHtml((state.name || 'U').slice(0, 1).toUpperCase())}</div>`}
+              <div>
+                <strong>${escapeHtml(state.name || 'User')}</strong>
+                <p class="muted">Logged-in user profile</p>
+              </div>
+            </div>
+            ${helloVideoUrl
+              ? `<video class="hello-video" src="${escapeAttribute(helloVideoUrl)}" controls autoplay muted loop playsinline>
+                  Your browser does not support the hello video.
+                </video>`
+              : '<div class="empty-state">Loading hello video...</div>'}
+          </div>
+        </div>
+
+        <section class="auth-card">
+          <h2>Quick actions</h2>
+          <div class="stack">
+            <button class="button primary" type="button" data-go-route="/dishes">Open dishes</button>
+            <button class="button ghost" type="button" data-go-route="/movies">Open movies</button>
+          </div>
+          <p class="muted small-text">To edit your profile photo, click your profile in the top-right corner.</p>
+        </section>
+      </section>
+    `);
+  }
+
+  return pageTemplate(`
+    <section class="panel auth-layout">
+      <div>
+        <span class="badge">FamilyApi access</span>
+        <h1>${state.authMode === 'login' ? 'Login to FamilyApp' : 'Create your FamilyApp account'}</h1>
+        <p class="muted">
+          The home page is now dedicated to authentication. Dishes and movies are available only after login.
+        </p>
+        <p class="muted">API status: ${escapeHtml(state.apiStatus || 'Waiting for login...')}</p>
+      </div>
+
+      <section class="auth-card">
+        <div class="auth-tabs">
+          <button class="tab-button ${state.authMode === 'login' ? 'active' : ''}" data-auth-mode="login">Login</button>
+          <button class="tab-button ${state.authMode === 'register' ? 'active' : ''}" data-auth-mode="register">Register</button>
+        </div>
+
+        <form class="stack" id="auth-form">
+          <label>
+            Name
+            <input name="name" type="text" placeholder="Your name" value="${escapeAttribute(state.name)}" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" placeholder="Password" required />
+          </label>
+          <button class="button primary" type="submit">
+            ${state.authMode === 'login' ? 'Login' : 'Register'}
+          </button>
+        </form>
+
+        ${state.authStatus ? `<p class="message ${state.authStatus.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(state.authStatus)}</p>` : ''}
+      </section>
+    </section>
+  `);
+}
+
+function renderEditorPage() {
+  const context = state.editorContext;
+  const item = context ? findItemByKey(context.kind, context.itemKey) : null;
+
+  if (!context || !item) {
+    return pageTemplate(`
+      <section class="panel">
+        <span class="badge">Editor</span>
+        <h1>Item editor unavailable</h1>
+        <p class="muted">Select a dish or movie from the list first.</p>
+        <button class="button primary" type="button" data-go-route="/dishes">Back to lists</button>
+      </section>
+    `);
+  }
+
+  const kindLabel = context.kind === 'dishes' ? 'Dish' : 'Movie';
+  const image = resolveMediaUrl(item.photo);
+  const currentPhoto = context.photoDraft || item.photo || '';
+  const mediaMode = context.mediaMode || 'link';
+
+  return pageTemplate(`
+    <section class="panel auth-layout">
+      <div class="stack">
+        <span class="badge">${kindLabel} editor</span>
+        <h1>Edit ${kindLabel.toLowerCase()}</h1>
+        <p class="muted">Update the title first. To change the image, click the preview card or switch to upload mode.</p>
+        <button class="thumb-shell thumb-button editor-preview" type="button" data-editor-photo-click="true">
+          ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(item.name || 'Preview')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
+        </button>
+      </div>
+      <section class="auth-card">
+        <form class="stack" id="editor-form">
+          <label>
+            ${kindLabel} name
+            <input name="primary" type="text" value="${escapeAttribute(context.primaryDraft || item.name || '')}" required />
+          </label>
+          <div class="media-mode-switch">
+            <button class="tab-button ${mediaMode === 'link' ? 'active' : ''}" type="button" data-editor-mode="link">Use link</button>
+            <button class="tab-button ${mediaMode === 'file' ? 'active' : ''}" type="button" data-editor-mode="file">Upload file</button>
+          </div>
+          ${mediaMode === 'file'
+            ? `<label>
+                Photo file
+                <input id="editor-file-input" name="imageFile" type="file" accept="image/*" />
+              </label>`
+            : `<label>
+                Photo path or URL
+                <input id="editor-link-input" name="image" type="text" value="${escapeAttribute(currentPhoto)}" />
+              </label>`}
+          ${context.status ? `<p class="message ${context.status.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(context.status)}</p>` : ''}
+          <div class="row-actions">
+            <button class="button primary" type="submit">Save changes</button>
+            <button class="button danger" type="button" data-editor-delete="true">Delete item</button>
+            <button class="button ghost" type="button" data-go-route="${context.kind === 'dishes' ? '/dishes' : '/movies'}">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </section>
+  `);
+}
+
+function renderProfilePage() {
+  const photoPreview = resolveMediaUrl(state.userPhotoUrl);
+  return pageTemplate(`
+    <section class="panel auth-layout">
+      <div class="stack">
+        <span class="badge">User profile</span>
+        <h1>Edit profile</h1>
+        <p class="muted">The current API edits profile data through <code>PUT /User/edit</code>, so you can update your name, password, and photo here.</p>
+        <button class="thumb-shell thumb-button editor-preview" type="button" data-profile-photo-click="true">
+          ${photoPreview ? `<img class="media-thumb" src="${escapeAttribute(photoPreview)}" alt="${escapeAttribute(state.name || 'Profile photo')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
+        </button>
+      </div>
+      <section class="auth-card">
+        <form class="stack" id="profile-form">
+          <label>
+            Name
+            <input name="name" type="text" value="${escapeAttribute(state.name)}" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" placeholder="Enter the password to store for this account" required />
+          </label>
+          <div class="media-mode-switch">
+            <button class="tab-button ${state.profileEditorMode === 'link' ? 'active' : ''}" type="button" data-profile-mode="link">Use link</button>
+            <button class="tab-button ${state.profileEditorMode === 'file' ? 'active' : ''}" type="button" data-profile-mode="file">Upload file</button>
+          </div>
+          ${state.profileEditorMode === 'file'
+            ? `<label>
+                Profile photo
+                <input id="profile-file-input" name="photoFile" type="file" accept="image/*" />
+              </label>`
+            : `<label>
+                Photo path or URL
+                <input id="profile-link-input" name="photo" type="text" value="${escapeAttribute(state.userPhotoUrl)}" />
+              </label>`}
+          ${state.profileStatus ? `<p class="message ${state.profileStatus.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(state.profileStatus)}</p>` : ''}
+          <div class="row-actions">
+            <button class="button primary" type="submit">Save profile</button>
+            <button class="button ghost" type="button" data-go-route="/">Back home</button>
+          </div>
+        </form>
+      </section>
+    </section>
+  `);
+}
+
+function renderCollectionPage({ kind, title, badge, status, itemField, imageField, imageLabel, inputPlaceholder, imagePlaceholder }) {
+  const view = kind === 'dishes' ? state.dishesView : state.moviesView;
+  const showForm = kind === 'dishes' ? state.showDishForm : state.showMovieForm;
+  const editingId = kind === 'dishes' ? state.editingDishId : state.editingMovieId;
+  const mediaMode = kind === 'dishes' ? state.dishMediaMode : state.movieMediaMode;
+  const items = currentSectionItems(kind);
+  return pageTemplate(`
+    <section class="panel collection-layout">
+      <aside class="side-menu">
+        <span class="badge">${badge}</span>
+        <h2>${title}</h2>
+        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All items</button>
+        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only my items</button>
+        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Randomized</button>
+        <p class="muted small-text">${escapeHtml(status || 'Choose a tab to browse the collection.')}</p>
+        <p class="muted small-text">Editable items available: ${getAllKnownItems(kind).length}</p>
+      </aside>
+
+      <div class="content-panel">
+        <div class="list-toolbar">
+          <div>
+            <h3>${view === 'all' ? `All ${title.toLowerCase()}` : view === 'mine' ? `My ${title.toLowerCase()}` : `Random ${title.toLowerCase().slice(0, -1)}`}</h3>
+            <p class="muted">All thumbnails use a fixed format and size.</p>
+          </div>
+          <button class="icon-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
+        </div>
+
+        ${showForm ? `
+          <form class="add-form" data-add-form="${kind}">
+            <label>
+              ${title === 'Dishes' ? 'Dish name' : 'Movie title'}
+              <input name="primary" type="text" placeholder="${inputPlaceholder}" value="${escapeAttribute(getEditingValue(kind, itemField))}" required />
+            </label>
+            <div class="media-mode-switch">
+              <button class="tab-button ${mediaMode === 'link' ? 'active' : ''}" type="button" data-media-mode-kind="${kind}" data-media-mode="link">Use link</button>
+              <button class="tab-button ${mediaMode === 'file' ? 'active' : ''}" type="button" data-media-mode-kind="${kind}" data-media-mode="file">Upload file</button>
+            </div>
+            ${mediaMode === 'file'
+              ? `<label>
+                  ${imageLabel}
+                  <input name="imageFile" type="file" accept="image/*" />
+                </label>`
+              : `<label>
+                  ${imageLabel}
+                  <input name="image" type="url" placeholder="${imagePlaceholder}" value="${escapeAttribute(getEditingValue(kind, imageField))}" />
+                </label>`}
+            <button class="button primary" type="submit">${editingId ? 'Save changes' : 'Save'}</button>
+          </form>
+        ` : ''}
+
+        ${renderMediaList({ kind, items, itemField, imageField, emptyText: title === 'Dishes' ? 'No dishes to display.' : 'No movies to display.' })}
+      </div>
+    </section>
+  `);
+}
+
+function getEditingValue(kind, field) {
+  const collection = getAllKnownItems(kind);
+  const editingId = kind === 'dishes' ? state.editingDishId : state.editingMovieId;
+  const item = collection.find((entry) => getItemId(entry) === editingId);
+  return item?.[field] || '';
+}
+
+function renderAddedBy(item) {
+  const name = item?.addedBy || item?.AddedBy || 'Unknown';
+  const explicitPhotoUrl = resolveMediaUrl(getAddedByPhotoPath(item));
+  const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
+  const avatarUrl = explicitPhotoUrl || (name === state.name ? userPhotoUrl : '');
+  return `
+    <span class="meta-tag meta-user">
+      ${avatarUrl
+        ? `<img class="meta-avatar" src="${escapeAttribute(avatarUrl)}" alt="${escapeAttribute(name)}" />`
+        : `<span class="meta-avatar meta-avatar-fallback">${escapeHtml((name || 'U').slice(0, 1).toUpperCase())}</span>`}
+      <span>Added by ${escapeHtml(name)}</span>
+    </span>
+  `;
+}
+
+function renderMediaList({ kind, items, itemField, imageField, emptyText }) {
+  if (!items.length) {
+    return `<div class="empty-state">${escapeHtml(emptyText)}</div>`;
+  }
+
+  return `
+    <ul class="media-list">
+      ${items
+        .map((item) => {
+          const title = item[itemField] || 'Untitled';
+          const image = resolveMediaUrl(item[imageField]);
+          const addedBy = item.addedBy || item.AddedBy ? renderAddedBy(item) : '';
+          const itemKey = getItemKey(kind, item);
+          return `
+            <li class="media-row">
+              <button class="thumb-shell thumb-button" type="button" data-edit-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}" data-photo-edit="true">
+                ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(title)}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
+              </button>
+              <div class="media-copy">
+                <strong>${escapeHtml(title)}</strong>
+                ${addedBy}
+                <div class="row-actions">
+                  <button class="button secondary" type="button" data-edit-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}">Edit</button>
+                  <button class="button danger" type="button" data-delete-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}">Delete</button>
+                </div>
+              </div>
+            </li>
+          `;
+        })
+        .join('')}
+    </ul>
+  `;
+}
+
+function renderDishesPage() {
+  return renderCollectionPage({
+    kind: 'dishes',
+    title: 'Dishes',
+    badge: 'Family menu',
+    status: state.dishesStatus,
+    itemField: 'name',
+    imageField: 'photo',
+    imageLabel: 'Photo URL',
+    inputPlaceholder: 'Homemade pizza',
+    imagePlaceholder: 'https://example.com/dish.jpg',
+  });
+}
+
+function renderMoviesPage() {
+  return renderCollectionPage({
+    kind: 'movies',
+    title: 'Movies',
+    badge: 'Family cinema',
+    status: state.moviesStatus,
+    itemField: 'name',
+    imageField: 'photo',
+    imageLabel: 'Photo URL',
+    inputPlaceholder: 'The Lord of the Rings',
+    imagePlaceholder: 'https://example.com/movie.jpg',
+  });
+}
+
+function render() {
+  ensureProtectedRoute();
+  const view = routes[state.route] || renderHome;
+  app.innerHTML = view();
+
+  const logoutButton = document.querySelector('[data-action="logout"]');
+  if (logoutButton) {
+    logoutButton.addEventListener('click', async () => {
+      persistSession('', '');
+      state.authStatus = 'You have been signed out.';
+      state.apiStatus = '';
+      state.showDishForm = false;
+      state.showMovieForm = false;
+      state.editingDishId = '';
+      state.editingMovieId = '';
+      await refreshProtectedData();
+      await hydrateWelcomeMedia();
+      navigate('/');
+    });
+  }
+
+  document.querySelectorAll('[data-go-route]').forEach((button) => {
+    button.addEventListener('click', () => {
+      navigate(button.getAttribute('data-go-route') || '/');
+    });
+  });
+
+  document.querySelectorAll('[data-auth-mode]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.authMode = button.getAttribute('data-auth-mode') || 'login';
+      state.authStatus = '';
+      render();
+    });
+  });
+
+  const authForm = document.querySelector('#auth-form');
+  if (authForm) {
+    authForm.addEventListener('submit', handleAuthSubmit);
+  }
+
+  const editorForm = document.querySelector('#editor-form');
+  if (editorForm) {
+    editorForm.addEventListener('submit', handleEditorFormSubmit);
+  }
+
+  const profileForm = document.querySelector('#profile-form');
+  if (profileForm) {
+    profileForm.addEventListener('submit', handleProfileFormSubmit);
+  }
+
+  document.querySelectorAll('[data-view-kind]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const kind = button.getAttribute('data-view-kind');
+      const viewName = button.getAttribute('data-view');
+      if (kind === 'dishes') {
+        state.dishesView = viewName || 'all';
+        if (state.dishesView === 'random') {
+          state.randomDish = normalizeSingleItem(await apiRequest(endpoints.randomDish).catch(() => state.randomDish));
+        }
+      } else {
+        state.moviesView = viewName || 'all';
+        if (state.moviesView === 'random') {
+          state.randomMovie = normalizeSingleItem(await apiRequest(endpoints.randomMovie).catch(() => state.randomMovie));
+        }
+      }
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-media-mode-kind]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const kind = button.getAttribute('data-media-mode-kind');
+      const mode = button.getAttribute('data-media-mode') || 'link';
+      if (kind === 'dishes') {
+        state.dishMediaMode = mode;
+      } else {
+        state.movieMediaMode = mode;
+      }
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-toggle-form]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const kind = button.getAttribute('data-toggle-form');
+      if (kind === 'dishes') {
+        state.showDishForm = !state.showDishForm;
+        state.editingDishId = state.showDishForm ? state.editingDishId : '';
+      } else {
+        state.showMovieForm = !state.showMovieForm;
+        state.editingMovieId = state.showMovieForm ? state.editingMovieId : '';
+      }
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-edit-user-photo]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.profileStatus = '';
+      navigate('/profile');
+    });
+  });
+
+  document.querySelectorAll('[data-profile-mode]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.profileEditorMode = button.getAttribute('data-profile-mode') || 'link';
+      state.profileStatus = '';
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-edit-kind]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const kind = button.getAttribute('data-edit-kind');
+      const itemKey = button.getAttribute('data-item-key') || '';
+      openEditorPage(kind || '', itemKey, button.hasAttribute('data-photo-edit'));
+    });
+  });
+
+  document.querySelectorAll('[data-delete-kind]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const kind = button.getAttribute('data-delete-kind');
+      const itemKey = button.getAttribute('data-item-key') || '';
+      await handleDeleteItem(kind || '', itemKey);
+    });
+  });
+
+  document.querySelectorAll('[data-add-form]').forEach((form) => {
+    form.addEventListener('submit', handleSaveItem);
+  });
+
+  const editorDeleteButton = document.querySelector('[data-editor-delete]');
+  if (editorDeleteButton) {
+    editorDeleteButton.addEventListener('click', async () => {
+      if (!state.editorContext) {
+        return;
+      }
+      await handleDeleteItem(state.editorContext.kind, state.editorContext.itemKey, true);
+    });
+  }
+
+  const editorPhotoButton = document.querySelector('[data-editor-photo-click]');
+  if (editorPhotoButton) {
+    editorPhotoButton.addEventListener('click', () => {
+      if (!state.editorContext) {
+        return;
+      }
+      state.editorContext.mediaMode = 'file';
+      render();
+      const fileInput = document.querySelector('#editor-file-input');
+      if (fileInput) {
+        fileInput.click();
+      }
+    });
+  }
+
+  const profilePhotoButton = document.querySelector('[data-profile-photo-click]');
+  if (profilePhotoButton) {
+    profilePhotoButton.addEventListener('click', () => {
+      state.profileEditorMode = 'file';
+      render();
+      const fileInput = document.querySelector('#profile-file-input');
+      if (fileInput) {
+        fileInput.click();
+      }
+    });
+  }
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const name = String(formData.get('name') || '').trim();
+  const password = String(formData.get('password') || '').trim();
+
+  try {
+    if (state.authMode === 'register') {
+      await apiRequest(endpoints.register, {
+        method: 'POST',
+        body: JSON.stringify({ name, password }),
+      });
+      state.authStatus = 'Registration completed. You can now log in.';
+      state.authMode = 'login';
+      state.name = name;
+      render();
+      return;
+    }
+
+    const data = await apiRequest(endpoints.login, {
+      method: 'POST',
+      body: JSON.stringify({ name, password }),
+    });
+
+    const token = data?.Token || data?.token || '';
+    if (!token) {
+      throw new Error('The backend did not return a JWT token.');
+    }
+
+    persistSession(token, name);
+    state.authStatus = 'Login successful.';
+    await refreshProtectedData();
+    await hydrateWelcomeMedia();
+    navigate('/');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    state.authStatus = `Unable to authenticate. ${message}`;
+    render();
+  }
+}
+
+async function uploadFileToServer(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/File/upload`, {
+    method: 'POST',
+    headers: state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {},
+    body: formData,
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.message || data?.Message || `HTTP ${response.status}`);
+  }
+
+  const filePath = extractPathValue(data);
+  if (filePath) {
+    return filePath;
+  }
+
+  const fileName = data?.fileName || data?.FileName;
+  if (!fileName) {
+    throw new Error('The upload endpoint did not return a file path.');
+  }
+
+  return `/File/${fileName}`;
+}
+
+async function saveUserPhoto({ photo, file, mediaMode }) {
+  const resolvedPhoto = mediaMode === 'file' && file instanceof File && file.size > 0
+    ? await uploadFileToServer(file)
+    : String(photo || '').trim();
+
+  if (!resolvedPhoto) {
+    throw new Error('Please provide a photo link or choose a file.');
+  }
+  state.userPhotoUrl = resolvedPhoto;
+  writeStorage(`familyapp.userPhoto.${state.name}`, resolvedPhoto);
+  clearProtectedMediaCache();
+  render();
+}
+
+async function saveItem(kind, itemId, { primary, mediaMode, image, file }) {
+  const isDish = kind === 'dishes';
+  const endpoint = isDish ? endpoints.dishes : endpoints.movies;
+  const photo = mediaMode === 'file' && file instanceof File && file.size > 0
+    ? await uploadFileToServer(file)
+    : String(image || '').trim();
+  const payload = { name: primary, photo };
+
+  if (!primary) {
+    throw new Error(`Please provide a ${isDish ? 'dish name' : 'movie title'}.`);
+  }
+
+  if (itemId) {
+    await apiRequest(`${endpoint}/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  } else {
+    await apiRequest(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  if (isDish) {
+    state.dishesStatus = itemId ? 'Dish updated successfully.' : 'Dish added successfully.';
+  } else {
+    state.moviesStatus = itemId ? 'Movie updated successfully.' : 'Movie added successfully.';
+  }
+
+  await refreshProtectedData();
+}
+
+async function handleSaveItem(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const kind = form.getAttribute('data-add-form');
+  const formData = new FormData(form);
+  const primary = String(formData.get('primary') || '').trim();
+
+  if (!primary) {
+    return;
+  }
+
+  const isDish = kind === 'dishes';
+  const mediaMode = isDish ? state.dishMediaMode : state.movieMediaMode;
+  const file = formData.get('imageFile');
+  const image = String(formData.get('image') || '').trim();
+
+  try {
+    await saveItem(kind, '', { primary, mediaMode, image, file });
+
+    if (isDish) {
+      state.showDishForm = false;
+      state.editingDishId = '';
+      state.dishesView = 'all';
+    } else {
+      state.showMovieForm = false;
+      state.editingMovieId = '';
+      state.moviesView = 'all';
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isDish) {
+      state.dishesStatus = `Unable to save dish. ${message}`;
+    } else {
+      state.moviesStatus = `Unable to save movie. ${message}`;
+    }
+    render();
+  }
+}
+
+async function handleEditorSave(kind, itemKey, payload) {
+  const item = findItemByKey(kind, itemKey);
+  const itemId = getItemId(item);
+  if (!item) {
+    throw new Error(`Unable to save ${kind === 'dishes' ? 'dish' : 'movie'}. The selected item was not found.`);
+  }
+  await saveItem(kind, itemId, payload);
+}
+
+async function handleDeleteItem(kind, itemKey, redirectAfterDelete = false) {
+  const isDish = kind === 'dishes';
+  const endpoint = isDish ? endpoints.dishes : endpoints.movies;
+  const item = findItemByKey(kind, itemKey);
+  const itemId = getItemId(item);
+
+  if (!item || !itemId) {
+    const message = `Unable to delete ${isDish ? 'dish' : 'movie'}. The selected item was not found.`;
+    if (isDish) {
+      state.dishesStatus = message;
+    } else {
+      state.moviesStatus = message;
+    }
+    render();
+    return;
+  }
+
+  try {
+    try {
+      await apiRequest(`${endpoint}/${itemId}`, { method: 'DELETE' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('404') && !message.toLowerCase().includes('not found')) {
+        throw error;
+      }
+    }
+    const refreshed = await apiRequest(endpoint).catch(() => []);
+    const itemStillExists = normalizeCollection(refreshed).some((entry) => getItemId(entry) === itemId);
+    if (itemStillExists) {
+      throw new Error('The backend reported delete success ambiguously, but the item is still present.');
+    }
+    if (isDish) {
+      state.dishesStatus = 'Dish deleted successfully.';
+      if (state.editingDishId === itemId) {
+        state.editingDishId = '';
+        state.showDishForm = false;
+      }
+    } else {
+      state.moviesStatus = 'Movie deleted successfully.';
+      if (state.editingMovieId === itemId) {
+        state.editingMovieId = '';
+        state.showMovieForm = false;
+      }
+    }
+    await refreshProtectedData();
+    if (redirectAfterDelete) {
+      state.editorContext = null;
+      navigate(isDish ? '/dishes' : '/movies');
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (isDish) {
+      state.dishesStatus = `Unable to delete dish. ${message}`;
+    } else {
+      state.moviesStatus = `Unable to delete movie. ${message}`;
+    }
+    render();
+  }
+}
+
+function openEditorPage(kind, itemKey, focusPhotoEditor = false) {
+  const item = findItemByKey(kind, itemKey);
+  if (!item) {
+    if (kind === 'dishes') {
+      state.dishesStatus = 'Unable to open editor. The selected dish was not found.';
+    } else {
+      state.moviesStatus = 'Unable to open editor. The selected movie was not found.';
+    }
+    render();
+    return;
+  }
+  state.editorContext = {
+    kind,
+    itemKey,
+    mediaMode: focusPhotoEditor ? 'file' : 'link',
+    primaryDraft: item?.name || '',
+    photoDraft: item?.photo || '',
+    status: '',
+  };
+  navigate('/editor');
+}
+
+async function handleEditorFormSubmit(event) {
+  event.preventDefault();
+  if (!state.editorContext) {
+    return;
+  }
+  const formData = new FormData(event.currentTarget);
+  const file = formData.get('imageFile');
+  const primary = String(formData.get('primary') || '').trim();
+  const image = String(formData.get('image') || '').trim();
+
+  try {
+    await handleEditorSave(state.editorContext.kind, state.editorContext.itemKey, {
+      primary,
+      mediaMode: state.editorContext.mediaMode,
+      image,
+      file,
+    });
+    const destination = state.editorContext.kind === 'dishes' ? '/dishes' : '/movies';
+    state.editorContext = null;
+    navigate(destination);
+  } catch (error) {
+    state.editorContext.status = `Unable to save item. ${error instanceof Error ? error.message : String(error)}`;
+    render();
+  }
+}
+
+async function handleProfileFormSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const name = String(formData.get('name') || '').trim();
+  const password = String(formData.get('password') || '').trim();
+  const file = formData.get('photoFile');
+  const photo = state.profileEditorMode === 'file' && file instanceof File && file.size > 0
+    ? await uploadFileToServer(file)
+    : String(formData.get('photo') || '').trim();
+
+  if (!name || !password) {
+    state.profileStatus = 'Unable to save profile. Name and password are required.';
+    render();
+    return;
+  }
+
+  try {
+    await apiRequest('/User/edit', {
+      method: 'PUT',
+      body: JSON.stringify({ name, password, photo }),
+    });
+    await saveUserPhoto({ photo, file: null, mediaMode: 'link' });
+    state.profileStatus = 'Profile updated successfully.';
+    if (name !== state.name) {
+      writeStorage(`familyapp.userPhoto.${name}`, photo);
+      persistSession('', '');
+      state.authStatus = 'Profile updated. Please log in again with your new credentials.';
+      navigate('/');
+      return;
+    }
+    render();
+  } catch (error) {
+    state.profileStatus = `Unable to save profile. ${error instanceof Error ? error.message : String(error)}`;
+    render();
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
+
+function renderFatalError(message) {
+  if (!app) {
+    return;
+  }
+
+  app.innerHTML = `
+    <div class="app-shell">
+      <section class="panel">
+        <span class="badge">Startup error</span>
+        <h1>FamilyApp could not start</h1>
+        <p class="message error">${escapeHtml(message)}</p>
+      </section>
+    </div>
+  `;
+}
+
+function bootstrap() {
+  if (!app) {
+    throw new Error('The #app container is missing from index.html.');
+  }
+
+  refreshProtectedData();
+  hydrateWelcomeMedia();
+  render();
+}
+
+try {
+  bootstrap();
+} catch (error) {
+  renderFatalError(error instanceof Error ? error.message : String(error));
+}
