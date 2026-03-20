@@ -1133,7 +1133,7 @@ async function handleDeleteItem(kind, itemKey, isEditor) {
   const id = getItemId(item).toString();
   const id2 = item._id || item.id;
   console.log(id2);
-  consloe.log(item.id);
+  console.log(item.id);
   console.log(item);
   if (!id) {
     return;
