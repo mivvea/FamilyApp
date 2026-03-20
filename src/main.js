@@ -173,7 +173,7 @@ async function fetchAuthorizedBlob(path) {
 
 function normalizePhotoUrl(payload) {
   const rawValue =
-    (typeof payload === 'string' && payload) ||
+    (typeof payload === 'string' && payload.trim()) ||
     payload?.photo ||
     payload?.url ||
     payload?.Photo ||
@@ -194,9 +194,9 @@ function normalizePhotoUrl(payload) {
     return `${API_BASE_URL}${rawValue}`;
   }
 
-  const looksLikeBase64 = !rawValue.includes('/') && !rawValue.includes('.') && rawValue.length > 40;
+  const looksLikeBase64 = !rawValue.startsWith('http') && !rawValue.includes('/') && !rawValue.includes('\\');
   if (looksLikeBase64) {
-    return `data:image/jpeg;base64,${rawValue}`;
+    return rawValue.startsWith('data:image') ? rawValue : `data:image/jpeg;base64,${rawValue}`;
   }
 
   return `${API_BASE_URL}/${rawValue.replace(/^\/+/, '')}`;
@@ -327,9 +327,8 @@ function renderHome() {
         <div>
           <span class="badge">Welcome back</span>
           <h1>Hi, ${escapeHtml(state.name || 'friend')}!</h1>
-          <p class="muted">Use the dishes and movies tabs to manage all items, only your items, and a randomized pick from the API.</p>
-          <p class="muted">API status: ${escapeHtml(state.apiStatus || 'Ready')}</p>
           <div class="welcome-media">
+            ${state.helloVideoUrl ? `<video class="hello-video" src="${escapeAttribute(state.helloVideoUrl)}" controls autoplay muted loop playsinline></video>` : `<div class="empty-state">Welcome video is not available.</div>`}
             <div class="profile-card">
               ${state.userPhotoUrl
                 ? `<img class="profile-photo" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
@@ -339,7 +338,6 @@ function renderHome() {
                 <p class="muted">Logged-in user profile</p>
               </div>
             </div>
-            ${state.helloVideoUrl ? `<video class="hello-video" src="${escapeAttribute(state.helloVideoUrl)}" controls autoplay muted loop playsinline></video>` : `<div class="empty-state">Welcome video is not available.</div>`}
           </div>
         </div>
 

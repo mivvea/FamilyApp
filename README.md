@@ -40,7 +40,7 @@ Supported backend functions in the UI:
 - `DELETE /Movies/{id}`
 
 ## Notes
-- The home page greets logged-in users with `Hi, user!` and now loads welcome media from the authenticated `/User/Photo` and `/Video` endpoints.
+- The home page greets logged-in users with `Hi, user!`, shows the welcome video first, and then renders the logged-in user photo from the base64 string returned by `/User/Photo`.
 - The app now uses the current lowercase `/my` routes from `FamilyApi`.
 - Edit is implemented in the frontend as a replace flow: delete the owned item and create the updated version with the new values.
 - Delete and edit actions are shown only for items owned by the logged-in user.
