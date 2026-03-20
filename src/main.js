@@ -1131,9 +1131,14 @@ async function handleDeleteItem(kind, itemKey, isEditor) {
   }
 
   const id = getItemId(item).toString();
+  const id2 = item._id;
+  const id3 = getItemId(item)._id;
   console.log(getItemId(item));
-   console.log(getItemId(id));
   console.log(typeof getItemId(item));
+  console.log(id);
+  console.log(id2);
+  console.log(id3);
+  console.log(typeof id);
   if (!id) {
     return;
   }
