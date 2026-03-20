@@ -7,12 +7,6 @@ FamilyApp is a GitHub Pages frontend for the public FamilyApi backend.
 - Hash-based routing that works on GitHub Pages
 - `fetch` for backend communication
 
-## Build
-1. `npm install`
-2. `npm run build`
-
-The build output is written to `dist/`.
-
 ## Deployment
 The repository is configured for GitHub Pages through GitHub Actions. Make sure the repository setting is:
 - **Settings → Pages → Source = GitHub Actions**
