@@ -68,6 +68,8 @@ const routes = {
   '/movies': renderMoviesPage,
 };
 
+const helloVideoUrl = `${API_BASE_URL}/File/GetVideo`;
+
 function isSignedIn() {
   return Boolean(state.authToken);
 }
@@ -154,6 +156,49 @@ function normalizeCollection(payload) {
   return [];
 }
 
+function extractPathValue(payload) {
+  if (typeof payload === 'string') {
+    return payload.trim();
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return '';
+  }
+
+  return String(
+    payload.filePath ||
+    payload.FilePath ||
+    payload.path ||
+    payload.Path ||
+    payload.photo ||
+    payload.Photo ||
+    payload.url ||
+    payload.Url ||
+    '',
+  ).trim();
+}
+
+function resolveMediaUrl(value) {
+  const path = extractPathValue(value);
+  if (!path) {
+    return '';
+  }
+
+  if (/^(data:|blob:|https?:\/\/)/i.test(path)) {
+    return path;
+  }
+
+  if (/^\/?File\/GetVideo$/i.test(path)) {
+    return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+  }
+
+  if (/^\/?File\/Get(\?|\/)/i.test(path)) {
+    return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+  }
+
+  return `${API_BASE_URL}/File/Get?filePath=${encodeURIComponent(path)}`;
+}
+
 async function hydrateWelcomeMedia() {
   if (!isSignedIn()) {
     state.userPhotoUrl = '';
@@ -161,7 +206,7 @@ async function hydrateWelcomeMedia() {
   }
 
   const photoPayload = await apiRequest('/User/Photo').catch(() => null);
-  state.userPhotoUrl = normalizePhotoUrl(photoPayload);
+  state.userPhotoUrl = resolveMediaUrl(photoPayload);
   render();
 }
 
@@ -291,6 +336,9 @@ function renderHome() {
                 <p class="muted">Logged-in user profile</p>
               </div>
             </div>
+            <video class="hello-video" src="${escapeAttribute(helloVideoUrl)}" controls autoplay muted loop playsinline>
+              Your browser does not support the hello video.
+            </video>
           </div>
         </div>
 
@@ -429,7 +477,7 @@ function renderMediaList({ kind, items, itemField, imageField, emptyText }) {
       ${items
         .map((item) => {
           const title = item[itemField] || 'Untitled';
-          const image = item[imageField];
+          const image = resolveMediaUrl(item[imageField]);
           const addedBy = item.addedBy ? renderAddedBy(item.addedBy) : '';
           const isOwnItem = item.addedBy && item.addedBy === state.name;
           const itemId = getItemId(item);
@@ -643,15 +691,6 @@ async function handleAuthSubmit(event) {
   }
 }
 
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.onerror = () => reject(new Error('Unable to read the selected file.'));
-    reader.readAsDataURL(file);
-  });
-}
-
 async function uploadFileToServer(file) {
   const formData = new FormData();
   formData.append('file', file);
@@ -667,9 +706,14 @@ async function uploadFileToServer(file) {
     throw new Error(data?.message || data?.Message || `HTTP ${response.status}`);
   }
 
+  const filePath = extractPathValue(data);
+  if (filePath) {
+    return filePath;
+  }
+
   const fileName = data?.fileName || data?.FileName;
   if (!fileName) {
-    throw new Error('The upload endpoint did not return a file name.');
+    throw new Error('The upload endpoint did not return a file path.');
   }
 
   return `/File/${fileName}`;

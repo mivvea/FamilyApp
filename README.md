@@ -27,6 +27,8 @@ Supported backend functions in the UI:
 - `POST /User/register`
 - `POST /User/login`
 - `GET /User/Photo`
+- `GET /File/Get?filePath=...`
+- `GET /File/GetVideo`
 - `POST /File/upload`
 - `GET /Dishes`
 - `GET /Dishes/my`
@@ -40,10 +42,11 @@ Supported backend functions in the UI:
 - `DELETE /Movies/{id}`
 
 ## Notes
-- The home page greets logged-in users with `Hi, user!` and renders the logged-in user photo from `/User/Photo`.
+- The home page greets logged-in users with `Hi, user!`, renders the logged-in user photo from `/User/Photo`, and shows the hello video from `/File/GetVideo`.
 - The top bar now also shows the logged-in user photo anywhere the user identity is displayed, and `addedBy` now renders with a small avatar next to the label.
 - Movie items now use the same `name` / `photo` fields as dishes.
-- Item create/edit forms now support both a direct link and a local file upload. Local files are uploaded to `/File/upload`, and the returned `/File/{fileName}` path is what gets stored in the item payload.
+- Item create/edit forms now support both a direct link and a local file upload. Local files are uploaded to `/File/upload`, and the returned file path is what gets stored in the item payload.
+- Stored file paths are rendered through `GET /File/Get?filePath=...`, which keeps existing database-backed `/File/...` values displayable in the UI.
 - The app now uses the current lowercase `/my` routes from `FamilyApi`.
 - Edit is implemented in the frontend as a replace flow: delete the owned item and create the updated version with the new values.
 - Delete and edit actions are shown only for items owned by the logged-in user.
