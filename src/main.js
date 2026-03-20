@@ -652,6 +652,29 @@ function readFileAsDataUrl(file) {
   });
 }
 
+async function uploadFileToServer(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/File/upload`, {
+    method: 'POST',
+    headers: state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {},
+    body: formData,
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.message || data?.Message || `HTTP ${response.status}`);
+  }
+
+  const fileName = data?.fileName || data?.FileName;
+  if (!fileName) {
+    throw new Error('The upload endpoint did not return a file name.');
+  }
+
+  return `/File/${fileName}`;
+}
+
 async function handleSaveItem(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -668,7 +691,7 @@ async function handleSaveItem(event) {
   const mediaMode = isDish ? state.dishMediaMode : state.movieMediaMode;
   const file = formData.get('imageFile');
   const image = mediaMode === 'file' && file instanceof File && file.size > 0
-    ? await readFileAsDataUrl(file)
+    ? await uploadFileToServer(file)
     : String(formData.get('image') || '').trim();
   const payload = isDish ? { name: primary, photo: image } : { name: primary, photo: image };
   const editingId = isDish ? state.editingDishId : state.editingMovieId;
