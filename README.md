@@ -2,7 +2,7 @@
 - HTML + CSS + Vanilla JavaScript
 - Hash-based routing that works on GitHub Pages
 - `fetch` for backend communication
-
+test
 ## Deployment
 The repository is configured for GitHub Pages through GitHub Actions. Make sure the repository setting is:
 - **Settings → Pages → Source = GitHub Actions**
