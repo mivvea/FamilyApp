@@ -68,7 +68,8 @@ const routes = {
   '/movies': renderMoviesPage,
 };
 
-const helloVideoUrl = `${API_BASE_URL}/File/GetVideo`;
+const protectedMediaCache = new Map();
+const pendingProtectedMedia = new Map();
 
 function isSignedIn() {
   return Boolean(state.authToken);
@@ -128,6 +129,10 @@ async function apiRequest(path, options = {}) {
 }
 
 function persistSession(token, name) {
+  if (state.authToken !== token) {
+    clearProtectedMediaCache();
+  }
+
   state.authToken = token || '';
   state.name = name || '';
 
@@ -178,6 +183,59 @@ function extractPathValue(payload) {
   ).trim();
 }
 
+function clearProtectedMediaCache() {
+  protectedMediaCache.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+  protectedMediaCache.clear();
+  pendingProtectedMedia.clear();
+}
+
+async function fetchProtectedMedia(cacheKey, requestUrl) {
+  if (!isSignedIn() || !cacheKey || protectedMediaCache.has(cacheKey) || pendingProtectedMedia.has(cacheKey)) {
+    return;
+  }
+
+  const request = fetch(requestUrl, {
+    headers: state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {},
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const previousUrl = protectedMediaCache.get(cacheKey);
+      if (previousUrl) {
+        URL.revokeObjectURL(previousUrl);
+      }
+
+      protectedMediaCache.set(cacheKey, URL.createObjectURL(blob));
+      render();
+    })
+    .catch(() => {
+      // Keep the existing placeholder UI when protected media cannot be loaded.
+    })
+    .finally(() => {
+      pendingProtectedMedia.delete(cacheKey);
+    });
+
+  pendingProtectedMedia.set(cacheKey, request);
+  await request;
+}
+
+function resolveProtectedEndpointUrl(cacheKey, requestUrl) {
+  if (!cacheKey || !requestUrl) {
+    return '';
+  }
+
+  const cachedUrl = protectedMediaCache.get(cacheKey);
+  if (cachedUrl) {
+    return cachedUrl;
+  }
+
+  void fetchProtectedMedia(cacheKey, requestUrl);
+  return '';
+}
+
 function resolveMediaUrl(value) {
   const path = extractPathValue(value);
   if (!path) {
@@ -189,14 +247,14 @@ function resolveMediaUrl(value) {
   }
 
   if (/^\/?File\/GetVideo$/i.test(path)) {
-    return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+    return resolveProtectedEndpointUrl(path, `${API_BASE_URL}/${path.replace(/^\/+/, '')}`);
   }
 
-  if (/^\/?File\/Get(\?|\/)/i.test(path)) {
-    return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+  if (/^\/?File\//i.test(path)) {
+    return resolveProtectedEndpointUrl(path, `${API_BASE_URL}/${path.replace(/^\/+/, '')}`);
   }
 
-  return `${API_BASE_URL}/File/Get?filePath=${encodeURIComponent(path)}`;
+  return resolveProtectedEndpointUrl(path, `${API_BASE_URL}/File/${encodeURIComponent(path)}`);
 }
 
 async function hydrateWelcomeMedia() {
@@ -206,7 +264,7 @@ async function hydrateWelcomeMedia() {
   }
 
   const photoPayload = await apiRequest('/User/Photo').catch(() => null);
-  state.userPhotoUrl = resolveMediaUrl(photoPayload);
+  state.userPhotoUrl = extractPathValue(photoPayload);
   render();
 }
 
@@ -285,10 +343,11 @@ function currentSectionItems(kind) {
 }
 
 function renderUserIdentity(name) {
+  const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
   return `
     <span class="user-mini">
-      ${state.userPhotoUrl
-        ? `<img class="user-mini-photo" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
+      ${userPhotoUrl
+        ? `<img class="user-mini-photo" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
         : `<span class="user-mini-photo user-mini-fallback">${escapeHtml(name.slice(0, 1).toUpperCase())}</span>`}
       <span>${escapeHtml(name)}</span>
     </span>
@@ -321,6 +380,8 @@ function pageTemplate(content) {
 
 function renderHome() {
   if (isSignedIn()) {
+    const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
+    const helloVideoUrl = resolveProtectedEndpointUrl('__hello_video__', `${API_BASE_URL}/File/GetVideo`);
     return pageTemplate(`
       <section class="panel auth-layout">
         <div>
@@ -328,17 +389,19 @@ function renderHome() {
           <h1>Hi, ${escapeHtml(state.name || 'friend')}!</h1>
           <div class="welcome-media">
             <div class="profile-card profile-card-large">
-              ${state.userPhotoUrl
-                ? `<img class="profile-photo profile-photo-large" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
+              ${userPhotoUrl
+                ? `<img class="profile-photo profile-photo-large" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
                 : `<div class="profile-photo profile-photo-large profile-fallback">${escapeHtml((state.name || 'U').slice(0, 1).toUpperCase())}</div>`}
               <div>
                 <strong>${escapeHtml(state.name || 'User')}</strong>
                 <p class="muted">Logged-in user profile</p>
               </div>
             </div>
-            <video class="hello-video" src="${escapeAttribute(helloVideoUrl)}" controls autoplay muted loop playsinline>
-              Your browser does not support the hello video.
-            </video>
+            ${helloVideoUrl
+              ? `<video class="hello-video" src="${escapeAttribute(helloVideoUrl)}" controls autoplay muted loop playsinline>
+                  Your browser does not support the hello video.
+                </video>`
+              : '<div class="empty-state">Loading hello video...</div>'}
           </div>
         </div>
 
@@ -456,11 +519,12 @@ function getEditingValue(kind, field) {
 }
 
 function renderAddedBy(name) {
-  const isOwnUser = name === state.name && state.userPhotoUrl;
+  const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
+  const isOwnUser = name === state.name && userPhotoUrl;
   return `
     <span class="meta-tag meta-user">
       ${isOwnUser
-        ? `<img class="meta-avatar" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
+        ? `<img class="meta-avatar" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
         : `<span class="meta-avatar meta-avatar-fallback">${escapeHtml((name || 'U').slice(0, 1).toUpperCase())}</span>`}
       <span>Added by ${escapeHtml(name)}</span>
     </span>

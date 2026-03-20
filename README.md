@@ -27,7 +27,7 @@ Supported backend functions in the UI:
 - `POST /User/register`
 - `POST /User/login`
 - `GET /User/Photo`
-- `GET /File/Get?filePath=...`
+- `GET /File/{filePath}`
 - `GET /File/GetVideo`
 - `POST /File/upload`
 - `GET /Dishes`
@@ -46,7 +46,7 @@ Supported backend functions in the UI:
 - The top bar now also shows the logged-in user photo anywhere the user identity is displayed, and `addedBy` now renders with a small avatar next to the label.
 - Movie items now use the same `name` / `photo` fields as dishes.
 - Item create/edit forms now support both a direct link and a local file upload. Local files are uploaded to `/File/upload`, and the returned file path is what gets stored in the item payload.
-- Stored file paths are rendered through `GET /File/Get?filePath=...`, which keeps existing database-backed `/File/...` values displayable in the UI.
+- Stored file paths are rendered through the authorized `GET /File/{filePath}` endpoint, so the frontend fetches protected files with the JWT token and displays them via browser blob URLs.
 - The app now uses the current lowercase `/my` routes from `FamilyApi`.
 - Edit is implemented in the frontend as a replace flow: delete the owned item and create the updated version with the new values.
 - Delete and edit actions are shown only for items owned by the logged-in user.
