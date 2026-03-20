@@ -43,10 +43,10 @@ Supported backend functions in the UI:
 
 ## Notes
 - The home page greets logged-in users with `Hi, user!`, renders the logged-in user photo from `/User/Photo`, and shows the hello video from `/File/GetVideo`.
-- The top bar now also shows the logged-in user photo anywhere the user identity is displayed, and `addedBy` now renders with a small avatar next to the label.
+- The top bar shows the logged-in user photo, the home page now includes a profile-photo editor with both link and file-upload modes, and `addedBy` renders an avatar for every item when the backend provides one.
 - Movie items now use the same `name` / `photo` fields as dishes.
 - Item create/edit forms now support both a direct link and a local file upload. Local files are uploaded to `/File/upload`, and the returned file path is what gets stored in the item payload.
 - Stored file paths are rendered through the authorized `GET /File/{filePath}` endpoint, so the frontend fetches protected files with the JWT token and displays them via browser blob URLs.
 - The app now uses the current lowercase `/my` routes from `FamilyApi`.
-- Edit is implemented in the frontend as a replace flow: delete the owned item and create the updated version with the new values.
-- Delete and edit actions are shown only for items owned by the logged-in user.
+- Item editing opens in a separate browser window with the current item prefilled, and clicking the item thumbnail there is the default way to change the photo.
+- Edit and delete actions are shown for all listed items.
