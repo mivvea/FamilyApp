@@ -44,7 +44,6 @@ const state = {
   authStatus: '',
   apiStatus: '',
   userPhotoUrl: '',
-  helloVideoUrl: '',
   dishes: [],
   myDishes: [],
   randomDish: null,
@@ -155,72 +154,14 @@ function normalizeCollection(payload) {
   return [];
 }
 
-function revokeObjectUrl(url) {
-  if (url && url.startsWith('blob:')) {
-    URL.revokeObjectURL(url);
-  }
-}
-
-async function fetchAuthorizedBlob(path) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {},
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  return response.blob();
-}
-
-function normalizePhotoUrl(payload) {
-  const rawValue =
-    (typeof payload === 'string' && payload.trim()) ||
-    payload?.photo ||
-    payload?.url ||
-    payload?.Photo ||
-    payload?.Url ||
-    payload?.base64 ||
-    payload?.Base64 ||
-    '';
-
-  if (!rawValue) {
-    return '';
-  }
-
-  if (rawValue.startsWith('data:image') || rawValue.startsWith('http://') || rawValue.startsWith('https://') || rawValue.startsWith('blob:')) {
-    return rawValue;
-  }
-
-  if (rawValue.startsWith('/')) {
-    return `${API_BASE_URL}${rawValue}`;
-  }
-
-  const looksLikeInlineValue = !rawValue.startsWith('http') && !rawValue.startsWith('/') && !rawValue.includes('\\');
-  if (looksLikeInlineValue) {
-    return rawValue.startsWith('data:image') ? rawValue : `data:image/png;base64,${rawValue}`;
-  }
-
-  return `${API_BASE_URL}/${rawValue.replace(/^\/+/, '')}`;
-}
-
 async function hydrateWelcomeMedia() {
   if (!isSignedIn()) {
-    revokeObjectUrl(state.helloVideoUrl);
     state.userPhotoUrl = '';
-    state.helloVideoUrl = '';
     return;
   }
 
-  const [photoPayload, videoBlob] = await Promise.all([
-    apiRequest('/User/Photo').catch(() => null),
-    fetchAuthorizedBlob('/Video').catch(() => null),
-  ]);
-
+  const photoPayload = await apiRequest('/User/Photo').catch(() => null);
   state.userPhotoUrl = normalizePhotoUrl(photoPayload);
-
-  revokeObjectUrl(state.helloVideoUrl);
-  state.helloVideoUrl = videoBlob ? URL.createObjectURL(videoBlob) : '';
   render();
 }
 
@@ -341,11 +282,10 @@ function renderHome() {
           <span class="badge">Welcome back</span>
           <h1>Hi, ${escapeHtml(state.name || 'friend')}!</h1>
           <div class="welcome-media">
-            ${state.helloVideoUrl ? `<video class="hello-video" src="${escapeAttribute(state.helloVideoUrl)}" controls autoplay loop playsinline></video>` : `<div class="empty-state">Welcome video is not available.</div>`}
-            <div class="profile-card">
+            <div class="profile-card profile-card-large">
               ${state.userPhotoUrl
-                ? `<img class="profile-photo" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
-                : `<div class="profile-photo profile-fallback">${escapeHtml((state.name || 'U').slice(0, 1).toUpperCase())}</div>`}
+                ? `<img class="profile-photo profile-photo-large" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
+                : `<div class="profile-photo profile-photo-large profile-fallback">${escapeHtml((state.name || 'U').slice(0, 1).toUpperCase())}</div>`}
               <div>
                 <strong>${escapeHtml(state.name || 'User')}</strong>
                 <p class="muted">Logged-in user profile</p>
@@ -415,9 +355,9 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
       <aside class="side-menu">
         <span class="badge">${badge}</span>
         <h2>${title}</h2>
-        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All</button>
-        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only mine</button>
-        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Proposition</button>
+        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All items</button>
+        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only my items</button>
+        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Randomized</button>
         <p class="muted small-text">${escapeHtml(status || 'Choose a tab to browse the collection.')}</p>
         <p class="muted small-text">Editable items available: ${ownItems.length}</p>
       </aside>
@@ -426,6 +366,7 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
         <div class="list-toolbar">
           <div>
             <h3>${view === 'all' ? `All ${title.toLowerCase()}` : view === 'mine' ? `My ${title.toLowerCase()}` : `Random ${title.toLowerCase().slice(0, -1)}`}</h3>
+            <p class="muted">All thumbnails use a fixed format and size.</p>
           </div>
           <button class="icon-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
         </div>
@@ -443,7 +384,7 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
             ${mediaMode === 'file'
               ? `<label>
                   ${imageLabel}
-                  <input name="imageFile" type="file" accept="image/*,video/*" />
+                  <input name="imageFile" type="file" accept="image/*" />
                 </label>`
               : `<label>
                   ${imageLabel}
@@ -466,6 +407,18 @@ function getEditingValue(kind, field) {
   return item?.[field] || '';
 }
 
+function renderAddedBy(name) {
+  const isOwnUser = name === state.name && state.userPhotoUrl;
+  return `
+    <span class="meta-tag meta-user">
+      ${isOwnUser
+        ? `<img class="meta-avatar" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
+        : `<span class="meta-avatar meta-avatar-fallback">${escapeHtml((name || 'U').slice(0, 1).toUpperCase())}</span>`}
+      <span>Added by ${escapeHtml(name)}</span>
+    </span>
+  `;
+}
+
 function renderMediaList({ kind, items, itemField, imageField, emptyText }) {
   if (!items.length) {
     return `<div class="empty-state">${escapeHtml(emptyText)}</div>`;
@@ -477,7 +430,7 @@ function renderMediaList({ kind, items, itemField, imageField, emptyText }) {
         .map((item) => {
           const title = item[itemField] || 'Untitled';
           const image = item[imageField];
-          const addedBy = item.addedBy ? `<span class="meta-tag">Added by ${escapeHtml(item.addedBy)}</span>` : '';
+          const addedBy = item.addedBy ? renderAddedBy(item.addedBy) : '';
           const isOwnItem = item.addedBy && item.addedBy === state.name;
           const itemId = getItemId(item);
           return `
@@ -523,11 +476,11 @@ function renderMoviesPage() {
     title: 'Movies',
     badge: 'Family cinema',
     status: state.moviesStatus,
-    itemField: 'title',
-    imageField: 'poster',
-    imageLabel: 'Poster URL',
+    itemField: 'name',
+    imageField: 'photo',
+    imageLabel: 'Photo URL',
     inputPlaceholder: 'The Lord of the Rings',
-    imagePlaceholder: 'https://example.com/poster.jpg',
+    imagePlaceholder: 'https://example.com/movie.jpg',
   });
 }
 
@@ -647,12 +600,6 @@ function render() {
   document.querySelectorAll('[data-add-form]').forEach((form) => {
     form.addEventListener('submit', handleSaveItem);
   });
-  const welcomeVideo = document.querySelector('.hello-video');
-  if (welcomeVideo) {
-    welcomeVideo.play().catch(() => {
-      // Browsers may still block unmuted autoplay until a user gesture happens.
-    });
-  }
 }
 
 async function handleAuthSubmit(event) {
@@ -723,7 +670,7 @@ async function handleSaveItem(event) {
   const image = mediaMode === 'file' && file instanceof File && file.size > 0
     ? await readFileAsDataUrl(file)
     : String(formData.get('image') || '').trim();
-  const payload = isDish ? { name: primary, photo: image } : { title: primary, poster: image };
+  const payload = isDish ? { name: primary, photo: image } : { name: primary, photo: image };
   const editingId = isDish ? state.editingDishId : state.editingMovieId;
 
   try {
