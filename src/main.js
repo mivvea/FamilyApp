@@ -992,7 +992,6 @@ async function handleEditorFormSubmit(event) {
     if (imageFile) {
       const uploadResponse = await apiRequest('/File/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
         body: formData,
       });
       body.photo = uploadResponse.filePath;
@@ -1025,7 +1024,6 @@ async function handleProfileFormSubmit(event) {
     if (photoFile) {
       const uploadResponse = await apiRequest('/File/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
         body: formData,
       });
       photoPath = uploadResponse.filePath;
@@ -1069,7 +1067,6 @@ async function handleSaveItem(event) {
     if (imageFile) {
       const uploadResponse = await apiRequest('/File/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
         body: formData,
       });
       photoPath = uploadResponse.filePath;
