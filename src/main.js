@@ -1157,4 +1157,9 @@ function escapeAttribute(text) {
   return escapeHtml(text).replace(/\'/g, '&#39;').replace(/\\/g, '&#92;').replace(/\`/g, '&#96;');
 }
 
+// Ensure data is loaded on page load if signed in
+if (isSignedIn()) {
+  refreshProtectedData();
+}
+
 render();
