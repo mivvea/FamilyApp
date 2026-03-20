@@ -10,6 +10,12 @@ const endpoints = {
   randomMovie: '/Movies/random',
 };
 
+const helloVideoCandidates = [
+  `${API_BASE_URL}/hello.mp4`,
+  `${API_BASE_URL}/videos/hello.mp4`,
+  `${API_BASE_URL}/media/hello.mp4`,
+];
+
 const app = document.querySelector('#app');
 
 function readStorage(key) {
@@ -43,6 +49,8 @@ const state = {
   authToken: readStorage('familyapp.authToken'),
   authStatus: '',
   apiStatus: '',
+  userPhotoUrl: '',
+  helloVideoUrl: helloVideoCandidates[0],
   dishes: [],
   myDishes: [],
   randomDish: null,
@@ -149,6 +157,60 @@ function normalizeCollection(payload) {
   }
 
   return [];
+}
+
+function buildUserPhotoCandidates(name) {
+  const safeName = encodeURIComponent(name);
+  return [
+    `${API_BASE_URL}/users/${safeName}.jpg`,
+    `${API_BASE_URL}/users/${safeName}.png`,
+    `${API_BASE_URL}/photos/${safeName}.jpg`,
+    `${API_BASE_URL}/photos/${safeName}.png`,
+    `${API_BASE_URL}/profile/${safeName}.jpg`,
+    `${API_BASE_URL}/profile/${safeName}.png`,
+    `${API_BASE_URL}/avatars/${safeName}.jpg`,
+    `${API_BASE_URL}/avatars/${safeName}.png`,
+  ];
+}
+
+function preloadMedia(urls, kind) {
+  return new Promise((resolve) => {
+    if (!urls.length) {
+      resolve('');
+      return;
+    }
+
+    const [current, ...rest] = urls;
+    if (kind === 'image') {
+      const image = new Image();
+      image.onload = () => resolve(current);
+      image.onerror = () => resolve(preloadMedia(rest, kind));
+      image.src = current;
+      return;
+    }
+
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadeddata = () => resolve(current);
+    video.onerror = () => resolve(preloadMedia(rest, kind));
+    video.src = current;
+  });
+}
+
+async function hydrateWelcomeMedia() {
+  if (!isSignedIn()) {
+    state.userPhotoUrl = '';
+    return;
+  }
+
+  const [photoUrl, videoUrl] = await Promise.all([
+    preloadMedia(buildUserPhotoCandidates(state.name), 'image'),
+    preloadMedia(helloVideoCandidates, 'video'),
+  ]);
+
+  state.userPhotoUrl = photoUrl || '';
+  state.helloVideoUrl = videoUrl || helloVideoCandidates[0];
+  render();
 }
 
 function normalizeSingleItem(payload) {
@@ -258,6 +320,18 @@ function renderHome() {
           <h1>Hi, ${escapeHtml(state.name || 'friend')}!</h1>
           <p class="muted">Use the dishes and movies tabs to manage all items, only your items, and a randomized pick from the API.</p>
           <p class="muted">API status: ${escapeHtml(state.apiStatus || 'Ready')}</p>
+          <div class="welcome-media">
+            <div class="profile-card">
+              ${state.userPhotoUrl
+                ? `<img class="profile-photo" src="${escapeAttribute(state.userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
+                : `<div class="profile-photo profile-fallback">${escapeHtml((state.name || 'U').slice(0, 1).toUpperCase())}</div>`}
+              <div>
+                <strong>${escapeHtml(state.name || 'User')}</strong>
+                <p class="muted">Logged-in user profile</p>
+              </div>
+            </div>
+            <video class="hello-video" src="${escapeAttribute(state.helloVideoUrl)}" controls autoplay muted loop playsinline></video>
+          </div>
         </div>
 
         <section class="auth-card">
@@ -444,6 +518,7 @@ function render() {
       state.editingDishId = '';
       state.editingMovieId = '';
       await refreshProtectedData();
+      await hydrateWelcomeMedia();
       navigate('/');
     });
   }
@@ -562,6 +637,7 @@ async function handleAuthSubmit(event) {
     persistSession(token, name);
     state.authStatus = 'Login successful.';
     await refreshProtectedData();
+    await hydrateWelcomeMedia();
     navigate('/');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -691,6 +767,7 @@ function bootstrap() {
   }
 
   refreshProtectedData();
+  hydrateWelcomeMedia();
   render();
 }
 
