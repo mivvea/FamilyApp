@@ -36,14 +36,16 @@ function removeStorage(key) {
   }
 }
 
+const initialStoredName = readStorage('familyapp.name');
+
 const state = {
   route: window.location.hash.replace(/^#/, '') || '/',
   authMode: 'login',
-  name: readStorage('familyapp.name'),
+  name: initialStoredName,
   authToken: readStorage('familyapp.authToken'),
   authStatus: '',
   apiStatus: '',
-  userPhotoUrl: '',
+  userPhotoUrl: readStorage(`familyapp.userPhoto.${initialStoredName}`),
   dishes: [],
   myDishes: [],
   randomDish: null,
@@ -60,12 +62,17 @@ const state = {
   movieMediaMode: 'link',
   editingDishId: '',
   editingMovieId: '',
+  editorContext: null,
+  profileEditorMode: 'link',
+  profileStatus: '',
 };
 
 const routes = {
   '/': renderHome,
   '/dishes': renderDishesPage,
   '/movies': renderMoviesPage,
+  '/editor': renderEditorPage,
+  '/profile': renderProfilePage,
 };
 
 const protectedMediaCache = new Map();
@@ -262,9 +269,6 @@ async function hydrateWelcomeMedia() {
     state.userPhotoUrl = '';
     return;
   }
-
-  const photoPayload = await apiRequest('/User/Photo').catch(() => null);
-  state.userPhotoUrl = extractPathValue(photoPayload);
   render();
 }
 
@@ -507,6 +511,113 @@ function renderHome() {
   `);
 }
 
+function renderEditorPage() {
+  const context = state.editorContext;
+  const item = context ? findItemByKey(context.kind, context.itemKey) : null;
+
+  if (!context || !item) {
+    return pageTemplate(`
+      <section class="panel">
+        <span class="badge">Editor</span>
+        <h1>Item editor unavailable</h1>
+        <p class="muted">Select a dish or movie from the list first.</p>
+        <button class="button primary" type="button" data-go-route="/dishes">Back to lists</button>
+      </section>
+    `);
+  }
+
+  const kindLabel = context.kind === 'dishes' ? 'Dish' : 'Movie';
+  const image = resolveMediaUrl(item.photo);
+  const currentPhoto = context.photoDraft || item.photo || '';
+  const mediaMode = context.mediaMode || 'link';
+
+  return pageTemplate(`
+    <section class="panel auth-layout">
+      <div class="stack">
+        <span class="badge">${kindLabel} editor</span>
+        <h1>Edit ${kindLabel.toLowerCase()}</h1>
+        <p class="muted">Update the title first. To change the image, click the preview card or switch to upload mode.</p>
+        <button class="thumb-shell thumb-button editor-preview" type="button" data-editor-photo-click="true">
+          ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(item.name || 'Preview')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
+        </button>
+      </div>
+      <section class="auth-card">
+        <form class="stack" id="editor-form">
+          <label>
+            ${kindLabel} name
+            <input name="primary" type="text" value="${escapeAttribute(context.primaryDraft || item.name || '')}" required />
+          </label>
+          <div class="media-mode-switch">
+            <button class="tab-button ${mediaMode === 'link' ? 'active' : ''}" type="button" data-editor-mode="link">Use link</button>
+            <button class="tab-button ${mediaMode === 'file' ? 'active' : ''}" type="button" data-editor-mode="file">Upload file</button>
+          </div>
+          ${mediaMode === 'file'
+            ? `<label>
+                Photo file
+                <input id="editor-file-input" name="imageFile" type="file" accept="image/*" />
+              </label>`
+            : `<label>
+                Photo path or URL
+                <input id="editor-link-input" name="image" type="text" value="${escapeAttribute(currentPhoto)}" />
+              </label>`}
+          ${context.status ? `<p class="message ${context.status.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(context.status)}</p>` : ''}
+          <div class="row-actions">
+            <button class="button primary" type="submit">Save changes</button>
+            <button class="button danger" type="button" data-editor-delete="true">Delete item</button>
+            <button class="button ghost" type="button" data-go-route="${context.kind === 'dishes' ? '/dishes' : '/movies'}">Cancel</button>
+          </div>
+        </form>
+      </section>
+    </section>
+  `);
+}
+
+function renderProfilePage() {
+  const photoPreview = resolveMediaUrl(state.userPhotoUrl);
+  return pageTemplate(`
+    <section class="panel auth-layout">
+      <div class="stack">
+        <span class="badge">User profile</span>
+        <h1>Edit profile</h1>
+        <p class="muted">The current API edits profile data through <code>PUT /User/edit</code>, so you can update your name, password, and photo here.</p>
+        <button class="thumb-shell thumb-button editor-preview" type="button" data-profile-photo-click="true">
+          ${photoPreview ? `<img class="media-thumb" src="${escapeAttribute(photoPreview)}" alt="${escapeAttribute(state.name || 'Profile photo')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
+        </button>
+      </div>
+      <section class="auth-card">
+        <form class="stack" id="profile-form">
+          <label>
+            Name
+            <input name="name" type="text" value="${escapeAttribute(state.name)}" required />
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" placeholder="Enter the password to store for this account" required />
+          </label>
+          <div class="media-mode-switch">
+            <button class="tab-button ${state.profileEditorMode === 'link' ? 'active' : ''}" type="button" data-profile-mode="link">Use link</button>
+            <button class="tab-button ${state.profileEditorMode === 'file' ? 'active' : ''}" type="button" data-profile-mode="file">Upload file</button>
+          </div>
+          ${state.profileEditorMode === 'file'
+            ? `<label>
+                Profile photo
+                <input id="profile-file-input" name="photoFile" type="file" accept="image/*" />
+              </label>`
+            : `<label>
+                Photo path or URL
+                <input id="profile-link-input" name="photo" type="text" value="${escapeAttribute(state.userPhotoUrl)}" />
+              </label>`}
+          ${state.profileStatus ? `<p class="message ${state.profileStatus.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(state.profileStatus)}</p>` : ''}
+          <div class="row-actions">
+            <button class="button primary" type="submit">Save profile</button>
+            <button class="button ghost" type="button" data-go-route="/">Back home</button>
+          </div>
+        </form>
+      </section>
+    </section>
+  `);
+}
+
 function renderCollectionPage({ kind, title, badge, status, itemField, imageField, imageLabel, inputPlaceholder, imagePlaceholder }) {
   const view = kind === 'dishes' ? state.dishesView : state.moviesView;
   const showForm = kind === 'dishes' ? state.showDishForm : state.showMovieForm;
@@ -687,6 +798,16 @@ function render() {
     authForm.addEventListener('submit', handleAuthSubmit);
   }
 
+  const editorForm = document.querySelector('#editor-form');
+  if (editorForm) {
+    editorForm.addEventListener('submit', handleEditorFormSubmit);
+  }
+
+  const profileForm = document.querySelector('#profile-form');
+  if (profileForm) {
+    profileForm.addEventListener('submit', handleProfileFormSubmit);
+  }
+
   document.querySelectorAll('[data-view-kind]').forEach((button) => {
     button.addEventListener('click', async () => {
       const kind = button.getAttribute('data-view-kind');
@@ -735,7 +856,16 @@ function render() {
 
   document.querySelectorAll('[data-edit-user-photo]').forEach((button) => {
     button.addEventListener('click', () => {
-      openUserPhotoEditor();
+      state.profileStatus = '';
+      navigate('/profile');
+    });
+  });
+
+  document.querySelectorAll('[data-profile-mode]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.profileEditorMode = button.getAttribute('data-profile-mode') || 'link';
+      state.profileStatus = '';
+      render();
     });
   });
 
@@ -743,7 +873,7 @@ function render() {
     button.addEventListener('click', () => {
       const kind = button.getAttribute('data-edit-kind');
       const itemKey = button.getAttribute('data-item-key') || '';
-      openEditorWindow(kind || '', itemKey, button.hasAttribute('data-photo-edit'));
+      openEditorPage(kind || '', itemKey, button.hasAttribute('data-photo-edit'));
     });
   });
 
@@ -758,6 +888,43 @@ function render() {
   document.querySelectorAll('[data-add-form]').forEach((form) => {
     form.addEventListener('submit', handleSaveItem);
   });
+
+  const editorDeleteButton = document.querySelector('[data-editor-delete]');
+  if (editorDeleteButton) {
+    editorDeleteButton.addEventListener('click', async () => {
+      if (!state.editorContext) {
+        return;
+      }
+      await handleDeleteItem(state.editorContext.kind, state.editorContext.itemKey, true);
+    });
+  }
+
+  const editorPhotoButton = document.querySelector('[data-editor-photo-click]');
+  if (editorPhotoButton) {
+    editorPhotoButton.addEventListener('click', () => {
+      if (!state.editorContext) {
+        return;
+      }
+      state.editorContext.mediaMode = 'file';
+      render();
+      const fileInput = document.querySelector('#editor-file-input');
+      if (fileInput) {
+        fileInput.click();
+      }
+    });
+  }
+
+  const profilePhotoButton = document.querySelector('[data-profile-photo-click]');
+  if (profilePhotoButton) {
+    profilePhotoButton.addEventListener('click', () => {
+      state.profileEditorMode = 'file';
+      render();
+      const fileInput = document.querySelector('#profile-file-input');
+      if (fileInput) {
+        fileInput.click();
+      }
+    });
+  }
 }
 
 async function handleAuthSubmit(event) {
@@ -829,29 +996,6 @@ async function uploadFileToServer(file) {
   return `/File/${fileName}`;
 }
 
-async function updateUserPhoto(photo) {
-  const attempts = [
-    { method: 'POST', path: '/User/Photo', body: { photo } },
-    { method: 'POST', path: '/User/Photo', body: { filePath: photo } },
-    { method: 'PUT', path: '/User/Photo', body: { photo } },
-    { method: 'PUT', path: '/User/Photo', body: { filePath: photo } },
-  ];
-
-  let lastError = null;
-  for (const attempt of attempts) {
-    try {
-      return await apiRequest(attempt.path, {
-        method: attempt.method,
-        body: JSON.stringify(attempt.body),
-      });
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw lastError || new Error('Unable to update user photo.');
-}
-
 async function saveUserPhoto({ photo, file, mediaMode }) {
   const resolvedPhoto = mediaMode === 'file' && file instanceof File && file.size > 0
     ? await uploadFileToServer(file)
@@ -860,12 +1004,10 @@ async function saveUserPhoto({ photo, file, mediaMode }) {
   if (!resolvedPhoto) {
     throw new Error('Please provide a photo link or choose a file.');
   }
-
-  await updateUserPhoto(resolvedPhoto);
   state.userPhotoUrl = resolvedPhoto;
+  writeStorage(`familyapp.userPhoto.${state.name}`, resolvedPhoto);
   clearProtectedMediaCache();
-  await hydrateWelcomeMedia();
-  await refreshProtectedData();
+  render();
 }
 
 async function saveItem(kind, itemId, { primary, mediaMode, image, file }) {
@@ -881,13 +1023,16 @@ async function saveItem(kind, itemId, { primary, mediaMode, image, file }) {
   }
 
   if (itemId) {
-    await apiRequest(`${endpoint}/${itemId}`, { method: 'DELETE' });
+    await apiRequest(`${endpoint}/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  } else {
+    await apiRequest(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
-
-  await apiRequest(endpoint, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
 
   if (isDish) {
     state.dishesStatus = itemId ? 'Dish updated successfully.' : 'Dish added successfully.';
@@ -946,7 +1091,7 @@ async function handleEditorSave(kind, itemKey, payload) {
   await saveItem(kind, itemId, payload);
 }
 
-async function handleDeleteItem(kind, itemKey) {
+async function handleDeleteItem(kind, itemKey, redirectAfterDelete = false) {
   const isDish = kind === 'dishes';
   const endpoint = isDish ? endpoints.dishes : endpoints.movies;
   const item = findItemByKey(kind, itemKey);
@@ -964,7 +1109,19 @@ async function handleDeleteItem(kind, itemKey) {
   }
 
   try {
-    await apiRequest(`${endpoint}/${itemId}`, { method: 'DELETE' });
+    try {
+      await apiRequest(`${endpoint}/${itemId}`, { method: 'DELETE' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('404') && !message.toLowerCase().includes('not found')) {
+        throw error;
+      }
+    }
+    const refreshed = await apiRequest(endpoint).catch(() => []);
+    const itemStillExists = normalizeCollection(refreshed).some((entry) => getItemId(entry) === itemId);
+    if (itemStillExists) {
+      throw new Error('The backend reported delete success ambiguously, but the item is still present.');
+    }
     if (isDish) {
       state.dishesStatus = 'Dish deleted successfully.';
       if (state.editingDishId === itemId) {
@@ -979,6 +1136,10 @@ async function handleDeleteItem(kind, itemKey) {
       }
     }
     await refreshProtectedData();
+    if (redirectAfterDelete) {
+      state.editorContext = null;
+      navigate(isDish ? '/dishes' : '/movies');
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (isDish) {
@@ -990,7 +1151,7 @@ async function handleDeleteItem(kind, itemKey) {
   }
 }
 
-function openEditorWindow(kind, itemKey, focusPhotoEditor = false) {
+function openEditorPage(kind, itemKey, focusPhotoEditor = false) {
   const item = findItemByKey(kind, itemKey);
   if (!item) {
     if (kind === 'dishes') {
@@ -1001,290 +1162,79 @@ function openEditorWindow(kind, itemKey, focusPhotoEditor = false) {
     render();
     return;
   }
-
-  const title = item?.name || item?.title || '';
-  const photoPath = item?.photo || '';
-  const photoPreview = resolveMediaUrl(photoPath);
-  const popup = window.open('', `${kind}-${encodeURIComponent(itemKey)}`, 'width=620,height=760');
-
-  if (!popup) {
-    if (kind === 'dishes') {
-      state.dishesStatus = 'Unable to open the editor window. Please allow pop-ups for this site.';
-    } else {
-      state.moviesStatus = 'Unable to open the editor window. Please allow pop-ups for this site.';
-    }
-    render();
-    return;
-  }
-
-  const serializedItem = JSON.stringify({
+  state.editorContext = {
     kind,
     itemKey,
-    title,
-    photoPath,
-    photoPreview,
-    focusPhotoEditor,
-  }).replace(/</g, '\\u003c');
-
-  popup.document.open();
-  popup.document.write(`<!DOCTYPE html>
-  <html lang="en">
-    <head>
-      <meta charset="utf-8" />
-      <title>Edit ${escapeHtml(kind === 'dishes' ? 'dish' : 'movie')}</title>
-      <style>
-        body { font-family: Inter, Arial, sans-serif; margin: 0; background: #081120; color: #f5f7ff; }
-        .shell { max-width: 620px; margin: 0 auto; padding: 24px; display: grid; gap: 18px; }
-        .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 18px; }
-        .stack { display: grid; gap: 14px; }
-        input { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: #0e1830; color: #fff; }
-        button { border: 0; border-radius: 12px; padding: 12px 16px; cursor: pointer; font: inherit; }
-        .primary { background: linear-gradient(135deg, #5a7dff 0%, #8f67ff 100%); color: #fff; }
-        .secondary { background: rgba(255,255,255,0.1); color: #fff; }
-        .danger { background: #c83f54; color: #fff; }
-        .row { display: flex; gap: 12px; flex-wrap: wrap; }
-        .row > button { flex: 1; }
-        .preview { width: 100%; min-height: 220px; border-radius: 18px; border: 1px dashed rgba(255,255,255,0.2); background: #0b1426; display: grid; place-items: center; overflow: hidden; color: #c5d0f5; }
-        .preview img { width: 100%; height: 220px; object-fit: cover; display: block; }
-        .hidden { display: none; }
-        .muted { color: #b7c2ea; font-size: 0.95rem; margin: 0; }
-        .status { min-height: 1.4em; }
-      </style>
-    </head>
-    <body>
-      <div class="shell">
-        <div class="card stack">
-          <div>
-            <h1 style="margin:0 0 8px;">Edit ${escapeHtml(kind === 'dishes' ? 'dish' : 'movie')}</h1>
-            <p class="muted">The title is ready to edit immediately. Click the photo area to change the image.</p>
-          </div>
-          <button id="preview" class="preview" type="button">No photo selected</button>
-          <label class="stack">
-            <span>${escapeHtml(kind === 'dishes' ? 'Dish name' : 'Movie title')}</span>
-            <input id="titleInput" type="text" />
-          </label>
-          <div class="row">
-            <button id="modeLink" class="secondary" type="button">Use link</button>
-            <button id="modeFile" class="secondary" type="button">Upload file</button>
-          </div>
-          <label id="linkWrap" class="stack">
-            <span>Photo URL</span>
-            <input id="imageInput" type="url" />
-          </label>
-          <label id="fileWrap" class="stack hidden">
-            <span>Photo file</span>
-            <input id="fileInput" type="file" accept="image/*" />
-          </label>
-          <p id="status" class="muted status"></p>
-          <div class="row">
-            <button id="saveButton" class="primary" type="button">Save changes</button>
-            <button id="deleteButton" class="danger" type="button">Delete item</button>
-            <button id="closeButton" class="secondary" type="button">Close</button>
-          </div>
-        </div>
-      </div>
-      <script>
-        const initialData = ${serializedItem};
-        let mediaMode = 'link';
-        let previewUrl = initialData.photoPreview || '';
-        const titleInput = document.getElementById('titleInput');
-        const imageInput = document.getElementById('imageInput');
-        const fileInput = document.getElementById('fileInput');
-        const linkWrap = document.getElementById('linkWrap');
-        const fileWrap = document.getElementById('fileWrap');
-        const preview = document.getElementById('preview');
-        const status = document.getElementById('status');
-        const modeLink = document.getElementById('modeLink');
-        const modeFile = document.getElementById('modeFile');
-        const setMode = (nextMode) => {
-          mediaMode = nextMode;
-          linkWrap.classList.toggle('hidden', nextMode !== 'link');
-          fileWrap.classList.toggle('hidden', nextMode !== 'file');
-          modeLink.style.opacity = nextMode === 'link' ? '1' : '0.7';
-          modeFile.style.opacity = nextMode === 'file' ? '1' : '0.7';
-        };
-        const renderPreview = (url) => {
-          preview.innerHTML = url ? '<img src="' + url.replace(/"/g, '&quot;') + '" alt="Preview" />' : 'No photo selected';
-        };
-        titleInput.value = initialData.title || '';
-        imageInput.value = initialData.photoPath || '';
-        renderPreview(previewUrl);
-        setMode(initialData.focusPhotoEditor ? 'file' : 'link');
-        if (initialData.focusPhotoEditor) {
-          setTimeout(() => fileInput.click(), 50);
-        } else {
-          titleInput.focus();
-          titleInput.select();
-        }
-        modeLink.addEventListener('click', () => { setMode('link'); imageInput.focus(); });
-        modeFile.addEventListener('click', () => { setMode('file'); fileInput.click(); });
-        preview.addEventListener('click', () => {
-          if (mediaMode === 'file') {
-            fileInput.click();
-          } else {
-            imageInput.focus();
-            imageInput.select();
-          }
-        });
-        imageInput.addEventListener('input', () => {
-          if (mediaMode === 'link') {
-            renderPreview(imageInput.value.trim());
-          }
-        });
-        fileInput.addEventListener('change', () => {
-          const file = fileInput.files && fileInput.files[0];
-          if (file) {
-            renderPreview(URL.createObjectURL(file));
-          }
-        });
-        document.getElementById('closeButton').addEventListener('click', () => window.close());
-        document.getElementById('deleteButton').addEventListener('click', async () => {
-          if (!window.confirm('Delete this item?')) return;
-          status.textContent = 'Deleting...';
-          try {
-            await window.opener.__familyAppDeleteItem(initialData.kind, initialData.itemKey);
-            window.close();
-          } catch (error) {
-            status.textContent = error instanceof Error ? error.message : String(error);
-          }
-        });
-        document.getElementById('saveButton').addEventListener('click', async () => {
-          status.textContent = 'Saving...';
-          try {
-            await window.opener.__familyAppSaveEditor(initialData.kind, initialData.itemKey, {
-              primary: titleInput.value.trim(),
-              mediaMode,
-              image: imageInput.value.trim(),
-              file: fileInput.files && fileInput.files[0] ? fileInput.files[0] : null,
-            });
-            window.close();
-          } catch (error) {
-            status.textContent = error instanceof Error ? error.message : String(error);
-          }
-        });
-      <\/script>
-    </body>
-  </html>`);
-  popup.document.close();
-  popup.focus();
+    mediaMode: focusPhotoEditor ? 'file' : 'link',
+    primaryDraft: item?.name || '',
+    photoDraft: item?.photo || '',
+    status: '',
+  };
+  navigate('/editor');
 }
 
-function openUserPhotoEditor() {
-  const popup = window.open('', 'user-photo-editor', 'width=520,height=640');
-  if (!popup) {
-    state.apiStatus = 'Unable to open the profile photo editor. Please allow pop-ups for this site.';
+async function handleEditorFormSubmit(event) {
+  event.preventDefault();
+  if (!state.editorContext) {
+    return;
+  }
+  const formData = new FormData(event.currentTarget);
+  const file = formData.get('imageFile');
+  const primary = String(formData.get('primary') || '').trim();
+  const image = String(formData.get('image') || '').trim();
+
+  try {
+    await handleEditorSave(state.editorContext.kind, state.editorContext.itemKey, {
+      primary,
+      mediaMode: state.editorContext.mediaMode,
+      image,
+      file,
+    });
+    const destination = state.editorContext.kind === 'dishes' ? '/dishes' : '/movies';
+    state.editorContext = null;
+    navigate(destination);
+  } catch (error) {
+    state.editorContext.status = `Unable to save item. ${error instanceof Error ? error.message : String(error)}`;
+    render();
+  }
+}
+
+async function handleProfileFormSubmit(event) {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const name = String(formData.get('name') || '').trim();
+  const password = String(formData.get('password') || '').trim();
+  const file = formData.get('photoFile');
+  const photo = state.profileEditorMode === 'file' && file instanceof File && file.size > 0
+    ? await uploadFileToServer(file)
+    : String(formData.get('photo') || '').trim();
+
+  if (!name || !password) {
+    state.profileStatus = 'Unable to save profile. Name and password are required.';
     render();
     return;
   }
 
-  const serialized = JSON.stringify({
-    currentPhoto: state.userPhotoUrl || '',
-    previewPhoto: resolveMediaUrl(state.userPhotoUrl),
-  }).replace(/</g, '\\u003c');
-
-  popup.document.open();
-  popup.document.write(`<!DOCTYPE html>
-  <html lang="en">
-    <head>
-      <meta charset="utf-8" />
-      <title>Edit profile photo</title>
-      <style>
-        body { font-family: Inter, Arial, sans-serif; margin: 0; background: #081120; color: #f5f7ff; }
-        .shell { max-width: 520px; margin: 0 auto; padding: 24px; display: grid; gap: 18px; }
-        .card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 18px; display: grid; gap: 14px; }
-        .preview { width: 100%; min-height: 240px; border-radius: 18px; border: 1px dashed rgba(255,255,255,0.18); display: grid; place-items: center; overflow: hidden; background: #0b1426; color: #c5d0f5; }
-        .preview img { width: 100%; height: 240px; object-fit: cover; display: block; }
-        .row { display: flex; gap: 12px; }
-        .row > button { flex: 1; }
-        .hidden { display: none; }
-        input { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: #0e1830; color: #fff; }
-        button { border: 0; border-radius: 12px; padding: 12px 16px; cursor: pointer; font: inherit; }
-        .primary { background: linear-gradient(135deg, #5a7dff 0%, #8f67ff 100%); color: #fff; }
-        .secondary { background: rgba(255,255,255,0.1); color: #fff; }
-        .status { min-height: 1.4em; color: #b7c2ea; }
-      </style>
-    </head>
-    <body>
-      <div class="shell">
-        <div class="card">
-          <h1 style="margin:0;">Edit profile photo</h1>
-          <button id="preview" class="preview" type="button">No photo selected</button>
-          <div class="row">
-            <button id="modeLink" class="secondary" type="button">Use link</button>
-            <button id="modeFile" class="secondary" type="button">Upload file</button>
-          </div>
-          <label id="linkWrap">
-            <span>Photo URL</span>
-            <input id="imageInput" type="url" />
-          </label>
-          <label id="fileWrap" class="hidden">
-            <span>Photo file</span>
-            <input id="fileInput" type="file" accept="image/*" />
-          </label>
-          <p id="status" class="status"></p>
-          <div class="row">
-            <button id="saveButton" class="primary" type="button">Save photo</button>
-            <button id="closeButton" class="secondary" type="button">Close</button>
-          </div>
-        </div>
-      </div>
-      <script>
-        const initialData = ${serialized};
-        let mediaMode = 'link';
-        const preview = document.getElementById('preview');
-        const imageInput = document.getElementById('imageInput');
-        const fileInput = document.getElementById('fileInput');
-        const linkWrap = document.getElementById('linkWrap');
-        const fileWrap = document.getElementById('fileWrap');
-        const status = document.getElementById('status');
-        const renderPreview = (url) => {
-          preview.innerHTML = url ? '<img src="' + url.replace(/"/g, '&quot;') + '" alt="Profile preview" />' : 'No photo selected';
-        };
-        const setMode = (nextMode) => {
-          mediaMode = nextMode;
-          linkWrap.classList.toggle('hidden', nextMode !== 'link');
-          fileWrap.classList.toggle('hidden', nextMode !== 'file');
-        };
-        imageInput.value = initialData.currentPhoto || '';
-        renderPreview(initialData.previewPhoto || '');
-        setMode('link');
-        document.getElementById('modeLink').addEventListener('click', () => { setMode('link'); imageInput.focus(); });
-        document.getElementById('modeFile').addEventListener('click', () => { setMode('file'); fileInput.click(); });
-        preview.addEventListener('click', () => {
-          if (mediaMode === 'file') fileInput.click();
-          else imageInput.focus();
-        });
-        imageInput.addEventListener('input', () => {
-          if (mediaMode === 'link') renderPreview(imageInput.value.trim());
-        });
-        fileInput.addEventListener('change', () => {
-          const file = fileInput.files && fileInput.files[0];
-          if (file) renderPreview(URL.createObjectURL(file));
-        });
-        document.getElementById('closeButton').addEventListener('click', () => window.close());
-        document.getElementById('saveButton').addEventListener('click', async () => {
-          status.textContent = 'Saving...';
-          try {
-            await window.opener.__familyAppSaveUserPhoto({
-              photo: imageInput.value.trim(),
-              file: fileInput.files && fileInput.files[0] ? fileInput.files[0] : null,
-              mediaMode,
-            });
-            window.close();
-          } catch (error) {
-            status.textContent = error instanceof Error ? error.message : String(error);
-          }
-        });
-      <\/script>
-    </body>
-  </html>`);
-  popup.document.close();
-  popup.focus();
+  try {
+    await apiRequest('/User/edit', {
+      method: 'PUT',
+      body: JSON.stringify({ name, password, photo }),
+    });
+    await saveUserPhoto({ photo, file: null, mediaMode: 'link' });
+    state.profileStatus = 'Profile updated successfully.';
+    if (name !== state.name) {
+      writeStorage(`familyapp.userPhoto.${name}`, photo);
+      persistSession('', '');
+      state.authStatus = 'Profile updated. Please log in again with your new credentials.';
+      navigate('/');
+      return;
+    }
+    render();
+  } catch (error) {
+    state.profileStatus = `Unable to save profile. ${error instanceof Error ? error.message : String(error)}`;
+    render();
+  }
 }
-
-window.__familyAppSaveEditor = handleEditorSave;
-window.__familyAppDeleteItem = handleDeleteItem;
-window.__familyAppSaveUserPhoto = saveUserPhoto;
 
 function escapeHtml(value) {
   return String(value)
