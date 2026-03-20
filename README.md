@@ -40,8 +40,8 @@ Supported backend functions in the UI:
 - `DELETE /Movies/{id}`
 
 ## Notes
-- The home page greets logged-in users with `Hi, user!`, shows the welcome video first, and then renders the logged-in user photo directly from the string returned by `/User/Photo`.
-- The welcome video is no longer muted by default.
+- The home page greets logged-in users with `Hi, user!`, shows the welcome video first, and then renders the logged-in user photo using a `data:image/png;base64,` prefix when `/User/Photo` returns an inline base64 string.
+- The frontend now explicitly calls `video.play()` after render to maximize the chance of autoplay, although some browsers may still require a user gesture for unmuted playback.
 - The app now uses the current lowercase `/my` routes from `FamilyApi`.
 - Edit is implemented in the frontend as a replace flow: delete the owned item and create the updated version with the new values.
 - Delete and edit actions are shown only for items owned by the logged-in user.

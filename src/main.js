@@ -196,7 +196,7 @@ function normalizePhotoUrl(payload) {
 
   const looksLikeInlineValue = !rawValue.startsWith('http') && !rawValue.startsWith('/') && !rawValue.includes('\\');
   if (looksLikeInlineValue) {
-    return rawValue;
+    return rawValue.startsWith('data:image') ? rawValue : `data:image/png;base64,${rawValue}`;
   }
 
   return `${API_BASE_URL}/${rawValue.replace(/^\/+/, '')}`;
@@ -610,6 +610,12 @@ function render() {
   document.querySelectorAll('[data-add-form]').forEach((form) => {
     form.addEventListener('submit', handleSaveItem);
   });
+  const welcomeVideo = document.querySelector('.hello-video');
+  if (welcomeVideo) {
+    welcomeVideo.play().catch(() => {
+      // Browsers may still block unmuted autoplay until a user gesture happens.
+    });
+  }
 }
 
 async function handleAuthSubmit(event) {
