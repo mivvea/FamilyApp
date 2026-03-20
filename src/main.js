@@ -990,9 +990,11 @@ async function handleEditorFormSubmit(event) {
 
   try {
     if (imageFile) {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', imageFile);
       const uploadResponse = await apiRequest('/File/upload', {
         method: 'POST',
-        body: formData,
+        body: uploadFormData,
       });
       body.photo = uploadResponse.filePath;
     }
@@ -1022,9 +1024,11 @@ async function handleProfileFormSubmit(event) {
   try {
     let photoPath = state.userPhotoUrl;
     if (photoFile) {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', photoFile);
       const uploadResponse = await apiRequest('/File/upload', {
         method: 'POST',
-        body: formData,
+        body: uploadFormData,
       });
       photoPath = uploadResponse.filePath;
     } else if (photo) {
@@ -1065,9 +1069,11 @@ async function handleSaveItem(event) {
   try {
     let photoPath = image;
     if (imageFile) {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', imageFile);
       const uploadResponse = await apiRequest('/File/upload', {
         method: 'POST',
-        body: formData,
+        body: uploadFormData,
       });
       photoPath = uploadResponse.filePath;
     }
