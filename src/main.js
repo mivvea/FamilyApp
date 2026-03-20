@@ -415,9 +415,9 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
       <aside class="side-menu">
         <span class="badge">${badge}</span>
         <h2>${title}</h2>
-        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All items</button>
-        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only my items</button>
-        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Randomized</button>
+        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All</button>
+        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only mine</button>
+        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Proposition</button>
         <p class="muted small-text">${escapeHtml(status || 'Choose a tab to browse the collection.')}</p>
         <p class="muted small-text">Editable items available: ${ownItems.length}</p>
       </aside>
@@ -426,7 +426,6 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
         <div class="list-toolbar">
           <div>
             <h3>${view === 'all' ? `All ${title.toLowerCase()}` : view === 'mine' ? `My ${title.toLowerCase()}` : `Random ${title.toLowerCase().slice(0, -1)}`}</h3>
-            <p class="muted">All thumbnails use a fixed format and size.</p>
           </div>
           <button class="icon-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
         </div>
