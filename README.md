@@ -26,6 +26,8 @@ This frontend is aligned with the public `mivvea/FamilyApi` repository.
 Supported backend functions in the UI:
 - `POST /User/register`
 - `POST /User/login`
+- `GET /User/Photo`
+- `GET /Video`
 - `GET /Dishes`
 - `GET /Dishes/my`
 - `GET /Dishes/random`
@@ -38,7 +40,7 @@ Supported backend functions in the UI:
 - `DELETE /Movies/{id}`
 
 ## Notes
-- The home page greets logged-in users with `Hi, user!` and now also tries to display the logged user photo plus the `hello.mp4` welcome video.
+- The home page greets logged-in users with `Hi, user!` and now loads welcome media from the authenticated `/User/Photo` and `/Video` endpoints.
 - The app now uses the current lowercase `/my` routes from `FamilyApi`.
 - Edit is implemented in the frontend as a replace flow: delete the owned item and create the updated version with the new values.
 - Delete and edit actions are shown only for items owned by the logged-in user.

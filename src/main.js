@@ -10,12 +10,6 @@ const endpoints = {
   randomMovie: '/Movies/random',
 };
 
-const helloVideoCandidates = [
-  `${API_BASE_URL}/hello.mp4`,
-  `${API_BASE_URL}/videos/hello.mp4`,
-  `${API_BASE_URL}/media/hello.mp4`,
-];
-
 const app = document.querySelector('#app');
 
 function readStorage(key) {
@@ -50,7 +44,7 @@ const state = {
   authStatus: '',
   apiStatus: '',
   userPhotoUrl: '',
-  helloVideoUrl: helloVideoCandidates[0],
+  helloVideoUrl: '',
   dishes: [],
   myDishes: [],
   randomDish: null,
@@ -159,57 +153,72 @@ function normalizeCollection(payload) {
   return [];
 }
 
-function buildUserPhotoCandidates(name) {
-  const safeName = encodeURIComponent(name);
-  return [
-    `${API_BASE_URL}/users/${safeName}.jpg`,
-    `${API_BASE_URL}/users/${safeName}.png`,
-    `${API_BASE_URL}/photos/${safeName}.jpg`,
-    `${API_BASE_URL}/photos/${safeName}.png`,
-    `${API_BASE_URL}/profile/${safeName}.jpg`,
-    `${API_BASE_URL}/profile/${safeName}.png`,
-    `${API_BASE_URL}/avatars/${safeName}.jpg`,
-    `${API_BASE_URL}/avatars/${safeName}.png`,
-  ];
+function revokeObjectUrl(url) {
+  if (url && url.startsWith('blob:')) {
+    URL.revokeObjectURL(url);
+  }
 }
 
-function preloadMedia(urls, kind) {
-  return new Promise((resolve) => {
-    if (!urls.length) {
-      resolve('');
-      return;
-    }
-
-    const [current, ...rest] = urls;
-    if (kind === 'image') {
-      const image = new Image();
-      image.onload = () => resolve(current);
-      image.onerror = () => resolve(preloadMedia(rest, kind));
-      image.src = current;
-      return;
-    }
-
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.onloadeddata = () => resolve(current);
-    video.onerror = () => resolve(preloadMedia(rest, kind));
-    video.src = current;
+async function fetchAuthorizedBlob(path) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {},
   });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  return response.blob();
+}
+
+function normalizePhotoUrl(payload) {
+  const rawValue =
+    (typeof payload === 'string' && payload) ||
+    payload?.photo ||
+    payload?.url ||
+    payload?.Photo ||
+    payload?.Url ||
+    payload?.base64 ||
+    payload?.Base64 ||
+    '';
+
+  if (!rawValue) {
+    return '';
+  }
+
+  if (rawValue.startsWith('data:image') || rawValue.startsWith('http://') || rawValue.startsWith('https://') || rawValue.startsWith('blob:')) {
+    return rawValue;
+  }
+
+  if (rawValue.startsWith('/')) {
+    return `${API_BASE_URL}${rawValue}`;
+  }
+
+  const looksLikeBase64 = !rawValue.includes('/') && !rawValue.includes('.') && rawValue.length > 40;
+  if (looksLikeBase64) {
+    return `data:image/jpeg;base64,${rawValue}`;
+  }
+
+  return `${API_BASE_URL}/${rawValue.replace(/^\/+/, '')}`;
 }
 
 async function hydrateWelcomeMedia() {
   if (!isSignedIn()) {
+    revokeObjectUrl(state.helloVideoUrl);
     state.userPhotoUrl = '';
+    state.helloVideoUrl = '';
     return;
   }
 
-  const [photoUrl, videoUrl] = await Promise.all([
-    preloadMedia(buildUserPhotoCandidates(state.name), 'image'),
-    preloadMedia(helloVideoCandidates, 'video'),
+  const [photoPayload, videoBlob] = await Promise.all([
+    apiRequest('/User/Photo').catch(() => null),
+    fetchAuthorizedBlob('/Video').catch(() => null),
   ]);
 
-  state.userPhotoUrl = photoUrl || '';
-  state.helloVideoUrl = videoUrl || helloVideoCandidates[0];
+  state.userPhotoUrl = normalizePhotoUrl(photoPayload);
+
+  revokeObjectUrl(state.helloVideoUrl);
+  state.helloVideoUrl = videoBlob ? URL.createObjectURL(videoBlob) : '';
   render();
 }
 
@@ -330,7 +339,7 @@ function renderHome() {
                 <p class="muted">Logged-in user profile</p>
               </div>
             </div>
-            <video class="hello-video" src="${escapeAttribute(state.helloVideoUrl)}" controls autoplay muted loop playsinline></video>
+            ${state.helloVideoUrl ? `<video class="hello-video" src="${escapeAttribute(state.helloVideoUrl)}" controls autoplay muted loop playsinline></video>` : `<div class="empty-state">Welcome video is not available.</div>`}
           </div>
         </div>
 
