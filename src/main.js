@@ -117,7 +117,7 @@ function getHeaders(extraHeaders = {}, body) {
 
 async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: getHeaders(options.headers),
+    headers: getHeaders(options.headers,options.body),
     ...options,
   });
 
