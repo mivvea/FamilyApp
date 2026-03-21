@@ -481,13 +481,6 @@ code {
   background: #030812;
 }
 
-
-.user-mini {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .user-mini-photo {
   width: 68px;
   height: 68px;
