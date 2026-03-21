@@ -338,12 +338,9 @@ function getAddedByPhotoPath(item) {
 function renderUserIdentity(name) {
   const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
   return `
-    <span class="user-mini">
       ${userPhotoUrl
         ? `<img class="user-mini-photo" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
         : `<span class="user-mini-photo user-mini-fallback">${escapeHtml(name.slice(0, 1).toUpperCase())}</span>`}
-      <span>${escapeHtml(name)}</span>
-    </span>
   `;
 }
 
