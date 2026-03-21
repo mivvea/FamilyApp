@@ -61,16 +61,20 @@ input {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .user-pill {
-  padding: 10px 14px;
-  border-radius: 999px;
+  padding: 12px 18px;
+  min-height: 48px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.08);
   color: #bcd0f2;
   border: 0;
   cursor: pointer;
   font: inherit;
+  display: inline-flex;
+  align-items: center;
 }
 
 .nav-list {
@@ -83,9 +87,14 @@ input {
 }
 
 .nav-list a {
-  padding: 10px 14px;
-  border-radius: 999px;
+  padding: 12px 18px;
+  min-height: 48px;
+  border-radius: 14px;
   color: #b3c2dd;
+  background: rgba(255, 255, 255, 0.04);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .nav-list a.active,
@@ -210,6 +219,14 @@ input::placeholder {
   padding: 12px 18px;
 }
 
+.topbar .button,
+.topbar .user-pill,
+.topbar .nav-list a {
+  font-weight: 600;
+  min-height: 48px;
+  border-radius: 14px;
+}
+
 .button.primary {
   background: linear-gradient(135deg, #4883ff 0%, #7b61ff 100%);
   color: white;
@@ -288,7 +305,7 @@ input::placeholder {
 
 .media-row {
   display: grid;
-  grid-template-columns: 152px 1fr;
+  grid-template-columns: 176px 1fr;
   gap: 18px;
   align-items: center;
   padding: 16px;
@@ -298,8 +315,8 @@ input::placeholder {
 }
 
 .thumb-shell {
-  width: 152px;
-  height: 152px;
+  width: 176px;
+  height: 176px;
   border-radius: 16px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
@@ -409,7 +426,14 @@ code {
 
   .thumb-shell {
     width: 100%;
-    height: 220px;
+    height: 240px;
+  }
+
+  .topbar .button,
+  .topbar .user-pill,
+  .topbar .nav-list a {
+    width: 100%;
+    justify-content: center;
   }
 }
 
@@ -418,6 +442,7 @@ code {
   display: grid;
   gap: 18px;
   margin-top: 24px;
+  max-width: 680px;
 }
 
 .profile-card {
@@ -490,11 +515,13 @@ code {
 
 .profile-card-large {
   align-items: center;
+  width: 100%;
+  justify-content: flex-start;
 }
 
 .profile-photo-large {
-  width: 122px;
-  height: 122px;
+  width: 140px;
+  height: 140px;
 }
 
 .meta-user {
@@ -504,9 +531,9 @@ code {
 }
 
 .meta-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
   object-fit: cover;
   display: block;
 }
