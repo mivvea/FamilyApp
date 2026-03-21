@@ -977,7 +977,8 @@ async function handleEditorFormSubmit(event) {
   const primary = String(formData.get('primary') || '').trim();
   const imageFile = formData.get('imageFile');
   const image = String(formData.get('image') || '').trim();
-
+  console.log(imageFile);
+  console.log(image);
   const { kind, itemKey } = state.editorContext;
   const item = findItemByKey(kind, itemKey);
   if (!item) {
