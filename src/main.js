@@ -1,19 +1,6 @@
-const API_BASE_URL = 'https://mivvea.runasp.net';
-const endpoints = Object.freeze({
-  login: '/User/login',
-  register: '/User/register',
-  editUser: '/User/edit',
-  listUsers: '/User/list',
-  fileUpload: '/File/upload',
-  fileBase: '/File',
-  helloVideo: '/File/HelloVideo',
-  dishes: '/Dishes',
-  myDishes: '/Dishes/my',
-  randomDish: '/Dishes/random',
-  movies: '/Movies',
-  myMovies: '/Movies/my',
-  randomMovie: '/Movies/random',
-});
+import { API_BASE_URL, endpoints } from './constants.js';
+import { ApiService } from './services/api-service.js';
+import { DataMapper } from './services/data-mapper.js';
 
 const app = document.querySelector('#app');
 
@@ -52,6 +39,7 @@ const state = {
   apiStatus: '',
   userPhotoUrl: readStorage(`familyapp.userPhoto.${initialStoredName}`),
   usersByName: new Map(),
+  usersById: new Map(),
   dishes: [],
   myDishes: [],
   randomDish: null,
@@ -107,48 +95,16 @@ function ensureProtectedRoute() {
   }
 }
 
-function getHeaders(extraHeaders = {}, body) {
-  const headers = {
-    ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {}),
-    ...extraHeaders,
-  };
-  
-  if (body instanceof FormData) {
-    return headers;
-  }
-  return {
-    ...headers,
-    'Content-Type': 'application/json',
-  };
-}
+const apiService = new ApiService({
+  baseUrl: API_BASE_URL,
+  getAuthToken: () => state.authToken,
+  onApiStatus: (status) => {
+    state.apiStatus = status;
+  },
+});
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: getHeaders(options.headers,options.body),
-    ...options,
-  });
-
-  const text = await response.text();
-  let data = null;
-
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
-  }
-
-  if (!response.ok) {
-    const message =
-      (typeof data === 'object' && (data?.Message || data?.message || data?.title || data?.error)) ||
-      (typeof data === 'string' && data) ||
-      `HTTP ${response.status}`;
-    throw new Error(message);
-  }
-
-  state.apiStatus = `Connected to ${path}`;
-  return data;
+  return apiService.request(path, options);
 }
 
 function persistSession(token, name) {
@@ -168,20 +124,16 @@ function persistSession(token, name) {
   }
 }
 
-function normalizeCollection(payload) {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
+function normalizeItem(payload) {
+  return DataMapper.normalizeItem(payload);
+}
 
-  if (Array.isArray(payload?.items)) {
-    return payload.items;
-  }
+function normalizeItems(payload) {
+  return DataMapper.normalizeItems(payload);
+}
 
-  if (Array.isArray(payload?.$values)) {
-    return payload.$values;
-  }
-
-  return [];
+function normalizeUsers(payload) {
+  return DataMapper.normalizeUsers(payload);
 }
 
 function normalizeMediaPath(value) {
@@ -235,15 +187,7 @@ function normalizeUsers(payload) {
 }
 
 function extractPathValue(payload) {
-  if (typeof payload === 'string') {
-    return payload.trim();
-  }
-
-  if (!payload || typeof payload !== 'object') {
-    return '';
-  }
-
-  return String(payload.Photo || '').trim();
+  return DataMapper.extractPathValue(payload);
 }
 
 function clearProtectedMediaCache() {
@@ -323,6 +267,7 @@ function resolveMediaUrl(value) {
 async function hydrateWelcomeMedia() {
   if (!isSignedIn()) {
     state.usersByName = new Map();
+    state.usersById = new Map();
     state.userPhotoUrl = '';
     return;
   }
@@ -343,6 +288,8 @@ function getItemId(item) {
 
 async function refreshProtectedData() {
   if (!isSignedIn()) {
+    state.usersByName = new Map();
+    state.usersById = new Map();
     state.dishes = [];
     state.myDishes = [];
     state.randomDish = null;
@@ -370,7 +317,17 @@ async function refreshProtectedData() {
       apiRequest(endpoints.randomMovie).catch(() => null),
     ]);
 
-    state.usersByName = new Map(normalizeUsers(users).map((user) => [user.Name.toLowerCase(), user.Photo]));
+    const normalizedUsers = normalizeUsers(users);
+    state.usersByName = new Map(
+      normalizedUsers
+        .filter((user) => user.Name)
+        .map((user) => [user.Name.toLowerCase(), user.Photo]),
+    );
+    state.usersById = new Map(
+      normalizedUsers
+        .filter((user) => user.Id)
+        .map((user) => [String(user.Id), user.Photo]),
+    );
     state.dishes = normalizeItems(dishes);
     state.myDishes = normalizeItems(myDishes);
     state.randomDish = normalizeItem(normalizeSingleItem(randomDish));
@@ -424,6 +381,7 @@ function getItemKey(kind, item) {
     item?.Name || '',
     item?.Photo || '',
     item?.AddedBy || '',
+    item?.AddedById || '',
   ].join('::');
 }
 
@@ -432,8 +390,10 @@ function findItemByKey(kind, itemKey) {
 }
 
 function getAddedByPhotoPath(item) {
+  const byId = state.usersById.get(String(item?.AddedById || ''));
+  const byName = state.usersByName.get(String(item?.AddedBy || '').toLowerCase());
   return extractPathValue(
-    item?.AddedByPhoto || state.usersByName.get(String(item?.AddedBy || '').toLowerCase()) || '',
+    item?.AddedByPhoto || byId || byName || '',
   );
 }
 
