@@ -103,10 +103,8 @@ function getHeaders(extraHeaders = {}, body) {
     ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {}),
     ...extraHeaders,
   };
-  console.log(body instanceof FormData);
-  console.log(body.constructor.name);
+  
   if (body instanceof FormData) {
-    console.log(body.constructor.name);
     return headers;
   }
   return {
@@ -986,8 +984,6 @@ async function handleEditorFormSubmit(event) {
   const primary = String(formData.get('primary') || '').trim();
   const imageFile = formData.get('imageFile');
   const image = String(formData.get('image') || '').trim();
-  console.log(imageFile);
-  console.log(image);
   const { kind, itemKey } = state.editorContext;
   const item = findItemByKey(kind, itemKey);
   if (!item) {
@@ -1141,14 +1137,6 @@ async function handleDeleteItem(kind, itemKey, isEditor) {
   }
 
   const id = getItemId(item).toString();
-  const id2 = item._id || item.id;
-  console.log(id2);
-  console.log(item.id);
-  console.log(item.id.toString());
-  const id4 = String(item.id);
-  console.log(id4);
-  console.log(String(item.id));
-  
   if (!id) {
     return;
   }
