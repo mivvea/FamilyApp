@@ -103,8 +103,10 @@ function getHeaders(extraHeaders = {}, body) {
     ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {}),
     ...extraHeaders,
   };
-  console.log(typeof body);
+  console.log(body instanceof FormData);
+  console.log(body.constructor.name);
   if (body instanceof FormData) {
+    console.log(body.constructor.name);
     return headers;
   }
   return {
