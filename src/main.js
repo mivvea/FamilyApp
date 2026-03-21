@@ -136,6 +136,56 @@ function normalizeUsers(payload) {
   return DataMapper.normalizeUsers(payload);
 }
 
+function normalizeMediaPath(value) {
+  return extractPathValue(value);
+}
+
+function normalizeItem(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const id = payload.id ?? payload.Id ?? '';
+  const Name = String(payload.Name ?? payload.name ?? payload.Title ?? payload.title ?? '').trim();
+  const Photo = normalizeMediaPath(payload.Photo ?? payload.photo ?? '');
+  const AddedBy = String(payload.AddedBy ?? payload.addedBy ?? '').trim();
+  const AddedByPhoto = normalizeMediaPath(payload.AddedByPhoto ?? payload.addedByPhoto ?? payload.UserPhoto ?? payload.userPhoto ?? '');
+
+  return {
+    ...payload,
+    id,
+    Name,
+    Photo,
+    AddedBy,
+    AddedByPhoto,
+  };
+}
+
+function normalizeItems(payload) {
+  return normalizeCollection(payload)
+    .map(normalizeItem)
+    .filter(Boolean);
+}
+
+function normalizeUser(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const Name = String(payload.Name ?? payload.name ?? '').trim();
+  const Photo = normalizeMediaPath(payload.Photo ?? payload.photo ?? '');
+  if (!Name) {
+    return null;
+  }
+  return { Name, Photo };
+}
+
+function normalizeUsers(payload) {
+  return normalizeCollection(payload)
+    .map(normalizeUser)
+    .filter(Boolean);
+}
+
 function extractPathValue(payload) {
   return DataMapper.extractPathValue(payload);
 }
