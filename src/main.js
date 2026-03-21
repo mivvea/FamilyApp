@@ -100,7 +100,6 @@ function ensureProtectedRoute() {
 
 function getHeaders(extraHeaders = {}) {
   return {
-    'Content-Type': 'application/json',
     ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {}),
     ...extraHeaders,
   };
