@@ -425,15 +425,15 @@ code {
   align-items: center;
   gap: 16px;
   padding: 18px;
-  border-radius: 18px;
+  border-radius: 25px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .profile-photo {
-  width: 122px;
-  height: 122px;
-  border-radius: 24px;
+  width: 244px;
+  height: 244px;
+  border-radius: 25px;
   object-fit: cover;
   display: block;
   background: rgba(255, 255, 255, 0.06);
@@ -464,9 +464,9 @@ code {
 }
 
 .user-mini-photo {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 68px;
+  height: 68px;
+  border-radius: 25px;
   object-fit: cover;
   display: block;
   background: rgba(255, 255, 255, 0.08);
@@ -475,8 +475,8 @@ code {
 .user-mini-fallback {
   display: grid;
   place-items: center;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 1.5rem;
+  font-weight: 800;
   color: white;
   background: linear-gradient(135deg, #4883ff 0%, #7b61ff 100%);
 }
@@ -493,8 +493,8 @@ code {
 }
 
 .profile-photo-large {
-  width: 122px;
-  height: 122px;
+  width: 244px;
+  height: 244px;
 }
 
 .meta-user {
