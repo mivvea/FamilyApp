@@ -184,17 +184,7 @@ function extractPathValue(payload) {
     return '';
   }
 
-  return String(
-    payload.filePath ||
-    payload.FilePath ||
-    payload.path ||
-    payload.Path ||
-    payload.photo ||
-    payload.Photo ||
-    payload.url ||
-    payload.Url ||
-    '',
-  ).trim();
+  return String(payload.Photo || '').trim();
 }
 
 function clearProtectedMediaCache() {
@@ -288,18 +278,7 @@ function normalizeSingleItem(payload) {
 }
 
 function getItemId(item) {
-  return (
-    item?.id ||
-    item?.Id ||
-    item?._id ||
-    item?.dishId ||
-    item?.DishId ||
-    item?.movieId ||
-    item?.MovieId ||
-    item?.itemId ||
-    item?.ItemId ||
-    ''
-  );
+  return item?.id;
 }
 
 async function refreshProtectedData() {
