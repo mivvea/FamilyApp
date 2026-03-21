@@ -124,68 +124,6 @@ function persistSession(token, name) {
   }
 }
 
-function normalizeItem(payload) {
-  return DataMapper.normalizeItem(payload);
-}
-
-function normalizeItems(payload) {
-  return DataMapper.normalizeItems(payload);
-}
-
-function normalizeUsers(payload) {
-  return DataMapper.normalizeUsers(payload);
-}
-
-function normalizeMediaPath(value) {
-  return extractPathValue(value);
-}
-
-function normalizeItem(payload) {
-  if (!payload || typeof payload !== 'object') {
-    return null;
-  }
-
-  const id = payload.id ?? payload.Id ?? '';
-  const Name = String(payload.Name ?? payload.name ?? payload.Title ?? payload.title ?? '').trim();
-  const Photo = normalizeMediaPath(payload.Photo ?? payload.photo ?? '');
-  const AddedBy = String(payload.AddedBy ?? payload.addedBy ?? '').trim();
-  const AddedByPhoto = normalizeMediaPath(payload.AddedByPhoto ?? payload.addedByPhoto ?? payload.UserPhoto ?? payload.userPhoto ?? '');
-
-  return {
-    ...payload,
-    id,
-    Name,
-    Photo,
-    AddedBy,
-    AddedByPhoto,
-  };
-}
-
-function normalizeItems(payload) {
-  return normalizeCollection(payload)
-    .map(normalizeItem)
-    .filter(Boolean);
-}
-
-function normalizeUser(payload) {
-  if (!payload || typeof payload !== 'object') {
-    return null;
-  }
-
-  const Name = String(payload.Name ?? payload.name ?? '').trim();
-  const Photo = normalizeMediaPath(payload.Photo ?? payload.photo ?? '');
-  if (!Name) {
-    return null;
-  }
-  return { Name, Photo };
-}
-
-function normalizeUsers(payload) {
-  return normalizeCollection(payload)
-    .map(normalizeUser)
-    .filter(Boolean);
-}
-
 function extractPathValue(payload) {
   return DataMapper.extractPathValue(payload);
 }
@@ -317,7 +255,7 @@ async function refreshProtectedData() {
       apiRequest(endpoints.randomMovie).catch(() => null),
     ]);
 
-    const normalizedUsers = normalizeUsers(users);
+    const normalizedUsers = DataMapper.normalizeUsers(users);
     state.usersByName = new Map(
       normalizedUsers
         .filter((user) => user.Name)
@@ -328,12 +266,12 @@ async function refreshProtectedData() {
         .filter((user) => user.Id)
         .map((user) => [String(user.Id), user.Photo]),
     );
-    state.dishes = normalizeItems(dishes);
-    state.myDishes = normalizeItems(myDishes);
-    state.randomDish = normalizeItem(normalizeSingleItem(randomDish));
-    state.movies = normalizeItems(movies);
-    state.myMovies = normalizeItems(myMovies);
-    state.randomMovie = normalizeItem(normalizeSingleItem(randomMovie));
+    state.dishes = DataMapper.normalizeItems(dishes);
+    state.myDishes = DataMapper.normalizeItems(myDishes);
+    state.randomDish = DataMapper.normalizeItem(normalizeSingleItem(randomDish));
+    state.movies = DataMapper.normalizeItems(movies);
+    state.myMovies = DataMapper.normalizeItems(myMovies);
+    state.randomMovie = DataMapper.normalizeItem(normalizeSingleItem(randomMovie));
     state.dishesStatus = myDishes?.error ? `All dishes loaded. ${myDishes.error}` : '';
     state.moviesStatus = myMovies?.error ? `All movies loaded. ${myMovies.error}` : '';
   } catch (error) {
@@ -821,12 +759,12 @@ function render() {
       if (kind === 'dishes') {
         state.dishesView = viewName || 'all';
         if (state.dishesView === 'random') {
-          state.randomDish = normalizeItem(normalizeSingleItem(await apiRequest(endpoints.randomDish).catch(() => state.randomDish)));
+          state.randomDish = DataMapper.normalizeItem(normalizeSingleItem(await apiRequest(endpoints.randomDish).catch(() => state.randomDish)));
         }
       } else {
         state.moviesView = viewName || 'all';
         if (state.moviesView === 'random') {
-          state.randomMovie = normalizeItem(normalizeSingleItem(await apiRequest(endpoints.randomMovie).catch(() => state.randomMovie)));
+          state.randomMovie = DataMapper.normalizeItem(normalizeSingleItem(await apiRequest(endpoints.randomMovie).catch(() => state.randomMovie)));
         }
       }
       render();
