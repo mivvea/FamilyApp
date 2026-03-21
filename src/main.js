@@ -1,14 +1,19 @@
 const API_BASE_URL = 'https://mivvea.runasp.net';
-const endpoints = {
+const endpoints = Object.freeze({
   login: '/User/login',
   register: '/User/register',
+  editUser: '/User/edit',
+  listUsers: '/User/list',
+  fileUpload: '/File/upload',
+  fileBase: '/File',
+  helloVideo: '/File/HelloVideo',
   dishes: '/Dishes',
   myDishes: '/Dishes/my',
   randomDish: '/Dishes/random',
   movies: '/Movies',
   myMovies: '/Movies/my',
   randomMovie: '/Movies/random',
-};
+});
 
 const app = document.querySelector('#app');
 
@@ -46,6 +51,7 @@ const state = {
   authStatus: '',
   apiStatus: '',
   userPhotoUrl: readStorage(`familyapp.userPhoto.${initialStoredName}`),
+  usersByName: new Map(),
   dishes: [],
   myDishes: [],
   randomDish: null,
@@ -62,8 +68,11 @@ const state = {
   movieMediaMode: 'link',
   editingDishId: '',
   editingMovieId: '',
+  dishDraft: { name: '', photo: '' },
+  movieDraft: { name: '', photo: '' },
   editorContext: null,
   profileEditorMode: 'link',
+  profilePasswordDraft: '',
   profileStatus: '',
 };
 
@@ -175,6 +184,56 @@ function normalizeCollection(payload) {
   return [];
 }
 
+function normalizeMediaPath(value) {
+  return extractPathValue(value);
+}
+
+function normalizeItem(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const id = payload.id ?? payload.Id ?? '';
+  const Name = String(payload.Name ?? payload.name ?? payload.Title ?? payload.title ?? '').trim();
+  const Photo = normalizeMediaPath(payload.Photo ?? payload.photo ?? '');
+  const AddedBy = String(payload.AddedBy ?? payload.addedBy ?? '').trim();
+  const AddedByPhoto = normalizeMediaPath(payload.AddedByPhoto ?? payload.addedByPhoto ?? payload.UserPhoto ?? payload.userPhoto ?? '');
+
+  return {
+    ...payload,
+    id,
+    Name,
+    Photo,
+    AddedBy,
+    AddedByPhoto,
+  };
+}
+
+function normalizeItems(payload) {
+  return normalizeCollection(payload)
+    .map(normalizeItem)
+    .filter(Boolean);
+}
+
+function normalizeUser(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const Name = String(payload.Name ?? payload.name ?? '').trim();
+  const Photo = normalizeMediaPath(payload.Photo ?? payload.photo ?? '');
+  if (!Name) {
+    return null;
+  }
+  return { Name, Photo };
+}
+
+function normalizeUsers(payload) {
+  return normalizeCollection(payload)
+    .map(normalizeUser)
+    .filter(Boolean);
+}
+
 function extractPathValue(payload) {
   if (typeof payload === 'string') {
     return payload.trim();
@@ -258,11 +317,12 @@ function resolveMediaUrl(value) {
     return resolveProtectedEndpointUrl(path, `${API_BASE_URL}/${path.replace(/^\/+/, '')}`);
   }
 
-  return resolveProtectedEndpointUrl(path, `${API_BASE_URL}/File/${encodeURIComponent(path)}`);
+  return resolveProtectedEndpointUrl(path, `${API_BASE_URL}${endpoints.fileBase}/${encodeURIComponent(path)}`);
 }
 
 async function hydrateWelcomeMedia() {
   if (!isSignedIn()) {
+    state.usersByName = new Map();
     state.userPhotoUrl = '';
     return;
   }
@@ -300,7 +360,8 @@ async function refreshProtectedData() {
   render();
 
   try {
-    const [dishes, myDishes, randomDish, movies, myMovies, randomMovie] = await Promise.all([
+    const [users, dishes, myDishes, randomDish, movies, myMovies, randomMovie] = await Promise.all([
+      apiRequest(endpoints.listUsers).catch(() => []),
       apiRequest(endpoints.dishes),
       apiRequest(endpoints.myDishes).catch((error) => ({ error: error.message })),
       apiRequest(endpoints.randomDish).catch(() => null),
@@ -309,12 +370,13 @@ async function refreshProtectedData() {
       apiRequest(endpoints.randomMovie).catch(() => null),
     ]);
 
-    state.dishes = normalizeCollection(dishes);
-    state.myDishes = normalizeCollection(myDishes);
-    state.randomDish = normalizeSingleItem(randomDish);
-    state.movies = normalizeCollection(movies);
-    state.myMovies = normalizeCollection(myMovies);
-    state.randomMovie = normalizeSingleItem(randomMovie);
+    state.usersByName = new Map(normalizeUsers(users).map((user) => [user.Name.toLowerCase(), user.Photo]));
+    state.dishes = normalizeItems(dishes);
+    state.myDishes = normalizeItems(myDishes);
+    state.randomDish = normalizeItem(normalizeSingleItem(randomDish));
+    state.movies = normalizeItems(movies);
+    state.myMovies = normalizeItems(myMovies);
+    state.randomMovie = normalizeItem(normalizeSingleItem(randomMovie));
     state.dishesStatus = myDishes?.error ? `All dishes loaded. ${myDishes.error}` : '';
     state.moviesStatus = myMovies?.error ? `All movies loaded. ${myMovies.error}` : '';
   } catch (error) {
@@ -359,9 +421,9 @@ function getItemKey(kind, item) {
   return [
     kind,
     getItemId(item) || '',
-    item?.name || item?.Name || item?.title || item?.Title || '',
-    item?.photo || item?.Photo || '',
-    item?.addedBy || item?.AddedBy || '',
+    item?.Name || '',
+    item?.Photo || '',
+    item?.AddedBy || '',
   ].join('::');
 }
 
@@ -371,17 +433,7 @@ function findItemByKey(kind, itemKey) {
 
 function getAddedByPhotoPath(item) {
   return extractPathValue(
-    item?.addedByPhoto ||
-    item?.AddedByPhoto ||
-    item?.userPhoto ||
-    item?.UserPhoto ||
-    item?.addedByUserPhoto ||
-    item?.AddedByUserPhoto ||
-    item?.addedByPhotoPath ||
-    item?.AddedByPhotoPath ||
-    item?.user?.photo ||
-    item?.User?.Photo ||
-    '',
+    item?.AddedByPhoto || state.usersByName.get(String(item?.AddedBy || '').toLowerCase()) || '',
   );
 }
 
@@ -424,7 +476,7 @@ function pageTemplate(content) {
 function renderHome() {
   if (isSignedIn()) {
     const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
-    const helloVideoUrl = resolveProtectedEndpointUrl('__hello_video__', `${API_BASE_URL}/File/HelloVideo`);
+    const helloVideoUrl = resolveProtectedEndpointUrl('__hello_video__', `${API_BASE_URL}${endpoints.helloVideo}`);
     return pageTemplate(`
       <section class="panel auth-layout">
         <div>
@@ -511,8 +563,8 @@ function renderEditorPage() {
   }
 
   const kindLabel = context.kind === 'dishes' ? 'Dish' : 'Movie';
-  const image = resolveMediaUrl(item.photo);
-  const currentPhoto = context.photoDraft || item.photo || '';
+  const image = resolveMediaUrl(context.photoDraft ?? item.Photo);
+  const currentPhoto = context.photoDraft ?? item.Photo ?? '';
   const mediaMode = context.mediaMode || 'link';
 
   return pageTemplate(`
@@ -522,14 +574,14 @@ function renderEditorPage() {
         <h1>Edit ${kindLabel.toLowerCase()}</h1>
         <p class="muted">Update the title first. To change the image, click the preview card or switch to upload mode.</p>
         <button class="thumb-shell thumb-button editor-preview" type="button" data-editor-photo-click="true">
-          ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(item.name || 'Preview')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
+          ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(item.Name || 'Preview')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
         </button>
       </div>
       <section class="auth-card">
         <form class="stack" id="editor-form">
           <label>
             ${kindLabel} name
-            <input name="primary" type="text" value="${escapeAttribute(context.primaryDraft || item.name || '')}" required />
+            <input name="primary" type="text" value="${escapeAttribute(context.primaryDraft ?? item.Name ?? '')}" required />
           </label>
           <div class="media-mode-switch">
             <button class="tab-button ${mediaMode === 'link' ? 'active' : ''}" type="button" data-editor-mode="link">Use link</button>
@@ -575,7 +627,7 @@ function renderProfilePage() {
           </label>
           <label>
             Password
-            <input name="password" type="password" placeholder="Enter the password to store for this account" required />
+            <input name="password" type="password" value="${escapeAttribute(state.profilePasswordDraft)}" placeholder="Optional: leave blank to keep current password" data-profile-password="true" />
           </label>
           <div class="media-mode-switch">
             <button class="tab-button ${state.profileEditorMode === 'link' ? 'active' : ''}" type="button" data-profile-mode="link">Use link</button>
@@ -655,14 +707,28 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
 }
 
 function getEditingValue(kind, field) {
+  const normalizedField = String(field || '').toLowerCase();
+  const draft = kind === 'dishes' ? state.dishDraft : state.movieDraft;
+  if (normalizedField === 'name' && draft.name) {
+    return draft.name;
+  }
+  if (normalizedField === 'photo' && draft.photo) {
+    return draft.photo;
+  }
+
   const collection = getAllKnownItems(kind);
   const editingId = kind === 'dishes' ? state.editingDishId : state.editingMovieId;
   const item = collection.find((entry) => getItemId(entry) === editingId);
-  return item?.[field] || '';
+  return normalizedField === 'name' ? (item?.Name || '') : (item?.Photo || '');
+}
+
+function updateCollectionDraft(kind, field, value) {
+  const target = kind === 'dishes' ? state.dishDraft : state.movieDraft;
+  target[field] = value;
 }
 
 function renderAddedBy(item) {
-  const name = item?.addedBy || item?.AddedBy || 'Unknown';
+  const name = item?.AddedBy || 'Unknown';
   const explicitPhotoUrl = resolveMediaUrl(getAddedByPhotoPath(item));
   const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
   const avatarUrl = explicitPhotoUrl || (name === state.name ? userPhotoUrl : '');
@@ -687,7 +753,7 @@ function renderMediaList({ kind, items, itemField, imageField, emptyText }) {
         .map((item) => {
           const title = item[itemField] || 'Untitled';
           const image = resolveMediaUrl(item[imageField]);
-          const addedBy = item.addedBy || item.AddedBy ? renderAddedBy(item) : '';
+          const addedBy = item.AddedBy ? renderAddedBy(item) : '';
           const itemKey = getItemKey(kind, item);
           return `
             <li class="media-row">
@@ -716,8 +782,8 @@ function renderDishesPage() {
     title: 'Dishes',
     badge: 'Family menu',
     status: state.dishesStatus,
-    itemField: 'name',
-    imageField: 'photo',
+    itemField: 'Name',
+    imageField: 'Photo',
     imageLabel: 'Photo URL',
     inputPlaceholder: 'Homemade pizza',
     imagePlaceholder: 'https://example.com/dish.jpg',
@@ -730,8 +796,8 @@ function renderMoviesPage() {
     title: 'Movies',
     badge: 'Family cinema',
     status: state.moviesStatus,
-    itemField: 'name',
-    imageField: 'photo',
+    itemField: 'Name',
+    imageField: 'Photo',
     imageLabel: 'Photo URL',
     inputPlaceholder: 'The Lord of the Rings',
     imagePlaceholder: 'https://example.com/movie.jpg',
@@ -795,12 +861,12 @@ function render() {
       if (kind === 'dishes') {
         state.dishesView = viewName || 'all';
         if (state.dishesView === 'random') {
-          state.randomDish = normalizeSingleItem(await apiRequest(endpoints.randomDish).catch(() => state.randomDish));
+          state.randomDish = normalizeItem(normalizeSingleItem(await apiRequest(endpoints.randomDish).catch(() => state.randomDish)));
         }
       } else {
         state.moviesView = viewName || 'all';
         if (state.moviesView === 'random') {
-          state.randomMovie = normalizeSingleItem(await apiRequest(endpoints.randomMovie).catch(() => state.randomMovie));
+          state.randomMovie = normalizeItem(normalizeSingleItem(await apiRequest(endpoints.randomMovie).catch(() => state.randomMovie)));
         }
       }
       render();
@@ -826,9 +892,15 @@ function render() {
       if (kind === 'dishes') {
         state.showDishForm = !state.showDishForm;
         state.editingDishId = state.showDishForm ? state.editingDishId : '';
+        if (!state.showDishForm) {
+          state.dishDraft = { name: '', photo: '' };
+        }
       } else {
         state.showMovieForm = !state.showMovieForm;
         state.editingMovieId = state.showMovieForm ? state.editingMovieId : '';
+        if (!state.showMovieForm) {
+          state.movieDraft = { name: '', photo: '' };
+        }
       }
       render();
     });
@@ -845,6 +917,17 @@ function render() {
     button.addEventListener('click', () => {
       state.profileEditorMode = button.getAttribute('data-profile-mode') || 'link';
       state.profileStatus = '';
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-editor-mode]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (!state.editorContext) {
+        return;
+      }
+      state.editorContext.mediaMode = button.getAttribute('data-editor-mode') || 'link';
+      state.editorContext.status = '';
       render();
     });
   });
@@ -867,7 +950,30 @@ function render() {
 
   document.querySelectorAll('[data-add-form]').forEach((form) => {
     form.addEventListener('submit', handleSaveItem);
+    form.addEventListener('input', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+      const kind = form.getAttribute('data-add-form');
+      if (!kind) {
+        return;
+      }
+      if (target.name === 'primary') {
+        updateCollectionDraft(kind, 'name', target.value);
+      }
+      if (target.name === 'image') {
+        updateCollectionDraft(kind, 'photo', target.value);
+      }
+    });
   });
+
+  const profilePasswordInput = document.querySelector('[data-profile-password]');
+  if (profilePasswordInput) {
+    profilePasswordInput.addEventListener('input', (event) => {
+      state.profilePasswordDraft = event.target.value;
+    });
+  }
 
   const editorDeleteButton = document.querySelector('[data-editor-delete]');
   if (editorDeleteButton) {
@@ -968,10 +1074,10 @@ async function handleEditorFormSubmit(event) {
   const body = { name: primary, photo: image };
 
   try {
-    if (imageFile) {
+    if (imageFile instanceof File && imageFile.size > 0) {
       const uploadFormData = new FormData();
       uploadFormData.append('file', imageFile);
-      const uploadResponse = await apiRequest('/File/upload', {
+      const uploadResponse = await apiRequest(endpoints.fileUpload, {
         method: 'POST',
         body: uploadFormData,
       });
@@ -997,15 +1103,16 @@ async function handleProfileFormSubmit(event) {
   const formData = new FormData(event.currentTarget);
   const name = String(formData.get('name') || '').trim();
   const password = String(formData.get('password') || '').trim();
+  state.profilePasswordDraft = password;
   const photoFile = formData.get('photoFile');
   const photo = String(formData.get('photo') || '').trim();
 
   try {
     let photoPath = state.userPhotoUrl;
-    if (photoFile) {
+    if (photoFile instanceof File && photoFile.size > 0) {
       const uploadFormData = new FormData();
       uploadFormData.append('file', photoFile);
-      const uploadResponse = await apiRequest('/File/upload', {
+      const uploadResponse = await apiRequest(endpoints.fileUpload, {
         method: 'POST',
         body: uploadFormData,
       });
@@ -1014,14 +1121,20 @@ async function handleProfileFormSubmit(event) {
       photoPath = photo;
     }
 
-    await apiRequest('/User/edit', {
+    const payload = { name, photo: photoPath };
+    if (password) {
+      payload.password = password;
+    }
+
+    await apiRequest(endpoints.editUser, {
       method: 'PUT',
-      body: JSON.stringify({ name, password, photo: photoPath }),
+      body: JSON.stringify(payload),
     });
 
     state.profileStatus = 'Profile updated.';
     state.name = name;
     state.userPhotoUrl = photoPath;
+    state.profilePasswordDraft = password;
     writeStorage('familyapp.name', name);
     writeStorage(`familyapp.userPhoto.${name}`, photoPath);
     await refreshProtectedData();
@@ -1047,10 +1160,10 @@ async function handleSaveItem(event) {
 
   try {
     let photoPath = image;
-    if (imageFile) {
+    if (imageFile instanceof File && imageFile.size > 0) {
       const uploadFormData = new FormData();
       uploadFormData.append('file', imageFile);
-      const uploadResponse = await apiRequest('/File/upload', {
+      const uploadResponse = await apiRequest(endpoints.fileUpload, {
         method: 'POST',
         body: uploadFormData,
       });
@@ -1073,9 +1186,11 @@ async function handleSaveItem(event) {
     if (kind === 'dishes') {
       state.showDishForm = false;
       state.editingDishId = '';
+      state.dishDraft = { name: '', photo: '' };
     } else {
       state.showMovieForm = false;
       state.editingMovieId = '';
+      state.movieDraft = { name: '', photo: '' };
     }
 
     await refreshProtectedData();
@@ -1095,8 +1210,8 @@ function openEditorPage(kind, itemKey, isPhotoEdit) {
   state.editorContext = {
     kind,
     itemKey,
-    primaryDraft: item.name,
-    photoDraft: isPhotoEdit ? null : item.photo,
+    primaryDraft: item.Name,
+    photoDraft: isPhotoEdit ? null : item.Photo,
     mediaMode: isPhotoEdit ? 'file' : null,
     status: '',
   };
