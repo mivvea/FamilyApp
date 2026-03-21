@@ -458,7 +458,6 @@ function renderHome() {
                 : `<div class="profile-photo profile-photo-large profile-fallback">${escapeHtml((state.name || 'U').slice(0, 1).toUpperCase())}</div>`}
               <div>
                 <strong>${escapeHtml(state.name || 'User')}</strong>
-                <p class="muted">Logged-in user profile</p>
               </div>
             </div>
             ${helloVideoUrl
@@ -475,7 +474,6 @@ function renderHome() {
             <button class="button primary" type="button" data-go-route="/dishes">Open dishes</button>
             <button class="button ghost" type="button" data-go-route="/movies">Open movies</button>
           </div>
-          <p class="muted small-text">To edit your profile photo, click your profile in the top-right corner.</p>
         </section>
       </section>
     `);
@@ -586,7 +584,6 @@ function renderProfilePage() {
       <div class="stack">
         <span class="badge">User profile</span>
         <h1>Edit profile</h1>
-        <p class="muted">The current API edits profile data through <code>PUT /User/edit</code>, so you can update your name, password, and photo here.</p>
         <button class="thumb-shell thumb-button editor-preview" type="button" data-profile-photo-click="true">
           ${photoPreview ? `<img class="media-thumb" src="${escapeAttribute(photoPreview)}" alt="${escapeAttribute(state.name || 'Profile photo')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
         </button>
@@ -636,18 +633,15 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
       <aside class="side-menu">
         <span class="badge">${badge}</span>
         <h2>${title}</h2>
-        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All items</button>
-        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only my items</button>
-        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Randomized</button>
-        <p class="muted small-text">${escapeHtml(status || 'Choose a tab to browse the collection.')}</p>
-        <p class="muted small-text">Editable items available: ${getAllKnownItems(kind).length}</p>
+        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All</button>
+        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only mine</button>
+        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Proposition</button>
       </aside>
 
       <div class="content-panel">
         <div class="list-toolbar">
           <div>
             <h3>${view === 'all' ? `All ${title.toLowerCase()}` : view === 'mine' ? `My ${title.toLowerCase()}` : `Random ${title.toLowerCase().slice(0, -1)}`}</h3>
-            <p class="muted">All thumbnails use a fixed format and size.</p>
           </div>
           <button class="icon-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
         </div>
