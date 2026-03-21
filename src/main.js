@@ -635,7 +635,7 @@ function renderAddedBy(item) {
       ${avatarUrl
         ? `<img class="meta-avatar" src="${escapeAttribute(avatarUrl)}" alt="${escapeAttribute(name)}" />`
         : `<span class="meta-avatar meta-avatar-fallback">${escapeHtml((name || 'U').slice(0, 1).toUpperCase())}</span>`}
-      <span>Added by ${escapeHtml(name)}</span>
+      <span>${escapeHtml(name)}</span>
     </span>
   `;
 }
