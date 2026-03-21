@@ -98,10 +98,17 @@ function ensureProtectedRoute() {
   }
 }
 
-function getHeaders(extraHeaders = {}) {
-  return {
+function getHeaders(extraHeaders = {}, body) {
+  const headers = {
     ...(state.authToken ? { Authorization: `Bearer ${state.authToken}` } : {}),
     ...extraHeaders,
+  };
+  if (body instanceof FormData) {
+    return headers;
+  }
+  return {
+    ...headers,
+    'Content-Type': 'application/json',
   };
 }
 
