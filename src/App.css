@@ -372,6 +372,21 @@ input::placeholder {
   background: rgba(72, 131, 255, 0.22);
 }
 
+.mobile-filter-link {
+  border: 0;
+  border-radius: 12px;
+  min-height: 40px;
+  padding: 8px 10px;
+  font-weight: 700;
+  color: #b6c2eb;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mobile-filter-link.active {
+  color: #fff;
+  background: rgba(72, 131, 255, 0.22);
+}
+
 .content-panel {
   min-height: 420px;
 }
