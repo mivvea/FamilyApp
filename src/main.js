@@ -466,9 +466,7 @@ function renderEditorPage() {
   return pageTemplate(`
     <section class="panel auth-layout">
       <div class="stack">
-        <span class="badge">${kindLabel} editor</span>
         <h1>Edit ${kindLabel.toLowerCase()}</h1>
-        <p class="muted">Update the title first. To change the image, click the preview card or switch to upload mode.</p>
         <button class="thumb-shell thumb-button editor-preview" type="button" data-editor-photo-click="true">
           ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(item.Name || 'Preview')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
         </button>
@@ -509,7 +507,6 @@ function renderProfilePage() {
   return pageTemplate(`
     <section class="panel auth-layout">
       <div class="stack">
-        <span class="badge">User profile</span>
         <h1>Edit profile</h1>
         <button class="thumb-shell thumb-button editor-preview" type="button" data-profile-photo-click="true">
           ${photoPreview ? `<img class="media-thumb" src="${escapeAttribute(photoPreview)}" alt="${escapeAttribute(state.name || 'Profile photo')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
