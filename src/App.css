@@ -633,21 +633,22 @@ input::placeholder {
 .history-calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 18px;
 }
 
 .calendar-weekday {
   text-align: center;
-  font-size: 0.8rem;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: #9bb0d0;
 }
 
 .calendar-day {
-  min-height: 70px;
+  min-height: 120px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 8px;
+  padding: 10px;
   background: rgba(255, 255, 255, 0.03);
 }
 
@@ -658,7 +659,8 @@ input::placeholder {
 
 .calendar-day-number {
   font-weight: 700;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  font-size: 1rem;
 }
 
 .calendar-day-items {
@@ -679,11 +681,10 @@ input::placeholder {
   border-radius: 8px;
   padding: 4px 6px;
   text-align: left;
-  font-size: 0.72rem;
+  font-size: 0.86rem;
   line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .calendar-item-chip.static {
@@ -710,6 +711,10 @@ input::placeholder {
 .history-day-list {
   margin: 0;
   padding-left: 18px;
+}
+
+.history-day-list [data-history-entry-key] {
+  cursor: pointer;
 }
 
 .empty-state {
