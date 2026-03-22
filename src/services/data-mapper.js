@@ -83,12 +83,13 @@ export class DataMapper {
     const darkModeNumber = Number(DarkModeRaw);
     const DarkMode = Number.isFinite(darkModeNumber) ? Math.max(0, Math.min(2, Math.round(darkModeNumber))) : 0;
     const Background = this.pickFirstString(payload, ['Background', 'background', 'ProfileBackground', 'profileBackground']);
+    const Color = this.pickFirstString(payload, ['Color', 'color', 'TextColor', 'textColor', 'ProfileColor', 'profileColor']);
 
     if (!Name && !Id) {
       return null;
     }
 
-    return { Id, Name, Photo, DarkMode, Background };
+    return { Id, Name, Photo, DarkMode, Background, Color };
   }
 
   static normalizeUsers(payload) {

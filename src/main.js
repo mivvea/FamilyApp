@@ -43,6 +43,8 @@ const state = {
   usersById: new Map(),
   userBackgroundByName: new Map(),
   userBackgroundById: new Map(),
+  userColorByName: new Map(),
+  userColorById: new Map(),
   dishes: [],
   myDishes: [],
   randomDish: null,
@@ -69,6 +71,7 @@ const state = {
   theme: initialStoredTheme === 'light' ? 'light' : 'dark',
   userDarkMode: 0,
   userBackground: '',
+  userColor: '',
 };
 
 const routes = {
@@ -215,7 +218,10 @@ async function hydrateWelcomeMedia() {
     state.usersById = new Map();
     state.userBackgroundByName = new Map();
     state.userBackgroundById = new Map();
+    state.userColorByName = new Map();
+    state.userColorById = new Map();
     state.userPhotoUrl = '';
+    state.userColor = '';
     return;
   }
   render();
@@ -239,6 +245,9 @@ async function refreshProtectedData() {
     state.usersById = new Map();
     state.userBackgroundByName = new Map();
     state.userBackgroundById = new Map();
+    state.userColorByName = new Map();
+    state.userColorById = new Map();
+    state.userColor = '';
     state.dishes = [];
     state.myDishes = [];
     state.randomDish = null;
@@ -287,6 +296,16 @@ async function refreshProtectedData() {
         .filter((user) => user.Id)
         .map((user) => [String(user.Id), sanitizeHexColor(user.Background)]),
     );
+    state.userColorByName = new Map(
+      normalizedUsers
+        .filter((user) => user.Name)
+        .map((user) => [user.Name.toLowerCase(), sanitizeHexColor(user.Color)]),
+    );
+    state.userColorById = new Map(
+      normalizedUsers
+        .filter((user) => user.Id)
+        .map((user) => [String(user.Id), sanitizeHexColor(user.Color)]),
+    );
     const currentUser = normalizedUsers.find((user) => String(user.Name || '').toLowerCase() === String(state.name || '').toLowerCase());
     if (currentUser) {
       if (currentUser.Photo) {
@@ -295,6 +314,7 @@ async function refreshProtectedData() {
       }
       state.userDarkMode = currentUser.DarkMode ?? 0;
       state.userBackground = sanitizeHexColor(currentUser.Background);
+      state.userColor = sanitizeHexColor(currentUser.Color);
       await applyUserThemePreference();
     }
     state.dishes = DataMapper.normalizeItems(dishes);
@@ -372,6 +392,29 @@ function getAddedByBackground(item) {
   return sanitizeHexColor(item?.AddedByBackground || byId || byName || '');
 }
 
+function getAddedByColor(item) {
+  const byId = state.userColorById.get(String(item?.AddedById || ''));
+  const byName = state.userColorByName.get(String(item?.AddedBy || '').toLowerCase());
+  return sanitizeHexColor(item?.AddedByColor || byId || byName || '');
+}
+
+function getItemCardStyle(item) {
+  const background = getAddedByBackground(item);
+  const color = getAddedByColor(item);
+  if (!background && !color) {
+    return '';
+  }
+
+  const styles = [];
+  if (background) {
+    styles.push(`background:${background}`);
+  }
+  if (color) {
+    styles.push(`color:${color}`);
+  }
+  return ` style="${escapeAttribute(styles.join(';'))};"`;
+}
+
 function renderUserIdentity(name) {
   const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
   return `
@@ -410,6 +453,7 @@ function renderHome() {
     const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
     const helloVideoUrl = resolveProtectedEndpointUrl('__hello_video__', `${API_BASE_URL}${endpoints.helloVideo}`);
     const profileBackgroundStyle = state.userBackground ? `style="background:${escapeAttribute(state.userBackground)};"` : '';
+    const profileTextStyle = state.userColor ? `style="color:${escapeAttribute(state.userColor)};"` : '';
     return pageTemplate(`
       <section class="panel auth-layout auth-layout-single">
         <div class="welcome-media">
@@ -418,7 +462,7 @@ function renderHome() {
               ${userPhotoUrl
                 ? `<img class="profile-photo profile-photo-large" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
                 : `<div class="profile-photo profile-photo-large profile-fallback">${escapeHtml((state.name || 'U').slice(0, 1).toUpperCase())}</div>`}
-              <div>
+              <div ${profileTextStyle}>
                 <strong>${escapeHtml(state.name || 'User')}</strong>
               </div>
             </div>
@@ -532,10 +576,11 @@ function renderEditorPage() {
 function renderProfilePage() {
   const photoPreview = resolveMediaUrl(state.userPhotoUrl);
   const profileBackgroundStyle = state.userBackground ? `style="background:${escapeAttribute(state.userBackground)};"` : '';
+  const profileTextStyle = state.userColor ? `style="color:${escapeAttribute(state.userColor)};"` : '';
   return pageTemplate(`
     <section class="panel auth-layout">
       <div class="stack profile-preview user-profile-surface" ${profileBackgroundStyle}>
-        <h1>Edit profile</h1>
+        <h1 ${profileTextStyle}>Edit profile</h1>
         <button class="thumb-shell thumb-button editor-preview" type="button" data-profile-photo-click="true">
           ${photoPreview ? `<img class="media-thumb" src="${escapeAttribute(photoPreview)}" alt="${escapeAttribute(state.name || 'Profile photo')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
         </button>
@@ -565,6 +610,14 @@ function renderProfilePage() {
           <label>
             Pick background color
             <input name="backgroundPicker" type="color" value="${escapeAttribute(state.userBackground || '#1f2a44')}" />
+          </label>
+          <label>
+            Profile text color (hex)
+            <input name="color" type="text" placeholder="#FFFFFF" value="${escapeAttribute(state.userColor)}" />
+          </label>
+          <label>
+            Pick text color
+            <input name="colorPicker" type="color" value="${escapeAttribute(state.userColor || '#ffffff')}" />
           </label>
           <div class="media-mode-switch">
             <button class="tab-button ${state.profileEditorMode === 'link' ? 'active' : ''}" type="button" data-profile-mode="link">Use link</button>
@@ -701,8 +754,9 @@ function renderMediaList({ kind, items, itemField, imageField, emptyText }) {
           const image = resolveMediaUrl(item[imageField]);
           const addedBy = item.AddedBy ? renderAddedBy(item) : '';
           const itemKey = getItemKey(kind, item);
+          const itemCardStyle = getItemCardStyle(item);
           return `
-            <li class="media-row">
+            <li class="media-row"${itemCardStyle}>
               <button class="thumb-shell thumb-button" type="button" data-edit-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}" data-photo-edit="true">
                 ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(title)}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
               </button>
@@ -944,6 +998,20 @@ function render() {
     });
   }
 
+  const colorInput = document.querySelector('input[name="color"]');
+  const colorPickerInput = document.querySelector('input[name="colorPicker"]');
+  if (colorInput && colorPickerInput) {
+    colorInput.addEventListener('input', () => {
+      const safeColor = sanitizeHexColor(colorInput.value);
+      if (safeColor) {
+        colorPickerInput.value = safeColor;
+      }
+    });
+    colorPickerInput.addEventListener('input', () => {
+      colorInput.value = colorPickerInput.value;
+    });
+  }
+
   const editorDeleteButton = document.querySelector('[data-editor-delete]');
   if (editorDeleteButton) {
     editorDeleteButton.addEventListener('click', async () => {
@@ -1076,6 +1144,9 @@ async function handleProfileFormSubmit(event) {
   const backgroundText = sanitizeHexColor(formData.get('background'));
   const backgroundPicker = sanitizeHexColor(formData.get('backgroundPicker'));
   const background = backgroundText || backgroundPicker;
+  const colorText = sanitizeHexColor(formData.get('color'));
+  const colorPicker = sanitizeHexColor(formData.get('colorPicker'));
+  const color = colorText || colorPicker;
   state.profilePasswordDraft = password;
   const photoFile = formData.get('photoFile');
   const photo = String(formData.get('photo') || '').trim();
@@ -1094,7 +1165,7 @@ async function handleProfileFormSubmit(event) {
       photoPath = photo;
     }
 
-    const payload = { name, photo: photoPath, darkMode, background };
+    const payload = { name, photo: photoPath, darkMode, background, color };
     if (password) {
       payload.password = password;
     }
@@ -1109,6 +1180,7 @@ async function handleProfileFormSubmit(event) {
     state.userPhotoUrl = photoPath;
     state.userDarkMode = Number.isFinite(darkMode) ? Math.max(0, Math.min(2, darkMode)) : 0;
     state.userBackground = background;
+    state.userColor = color;
     state.profilePasswordDraft = password;
     writeStorage('familyapp.name', name);
     writeStorage(`familyapp.userPhoto.${name}`, photoPath);
