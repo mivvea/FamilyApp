@@ -69,7 +69,6 @@ input {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 18px 26px;
   border: 1px solid rgba(118, 145, 255, 0.14);
   border-radius: 20px;
   background: linear-gradient(110deg, rgba(8, 18, 55, 0.95), rgba(8, 18, 53, 0.75));
@@ -87,8 +86,6 @@ input {
 }
 
 .user-pill {
-  width: 114px;
-  height: 114px;
   border-radius: 14px;
   background: rgba(63, 81, 162, 0.44);
   color: #d7e0ff;
@@ -554,8 +551,7 @@ code {
 }
 
 .user-mini-photo {
-  width: 114px;
-  height: 114px;
+  width: 130px;
   border-radius: 14px;
   object-fit: cover;
   display: block;
