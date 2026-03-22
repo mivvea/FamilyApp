@@ -106,7 +106,7 @@ select {
 .nav-list {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   align-items: center;
   gap: 0;
   list-style: none;
@@ -121,7 +121,7 @@ select {
   content: '';
   position: absolute;
   inset: 6px auto 6px 6px;
-  width: calc((100% - 12px) / 4);
+  width: calc((100% - 12px) / 6);
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(72, 131, 255, 0.45), rgba(123, 97, 255, 0.42));
   transition: transform 240ms ease;
@@ -136,8 +136,16 @@ select {
   transform: translateX(200%);
 }
 
-.nav-list:has(a.active[href='#/profile'])::before {
+.nav-list:has(a.active[href='#/travel'])::before {
   transform: translateX(300%);
+}
+
+.nav-list:has(a.active[href='#/history'])::before {
+  transform: translateX(400%);
+}
+
+.nav-list:has(a.active[href='#/profile'])::before {
+  transform: translateX(500%);
 }
 
 .nav-list a {
@@ -581,6 +589,105 @@ input::placeholder {
   background: linear-gradient(135deg, rgba(255, 80, 98, 0.34), rgba(176, 37, 67, 0.26));
 }
 
+.inline-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.travel-dates-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.calendar-legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+}
+
+.calendar-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.history-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #9bb0d0;
+}
+
+.calendar-day {
+  min-height: 70px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.calendar-day.muted-day {
+  border-style: dashed;
+  opacity: 0.35;
+}
+
+.calendar-day-number {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.calendar-day-markers {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.calendar-marker {
+  background: var(--marker-color, #94a3b8);
+  color: #fff;
+  border-radius: 999px;
+  min-width: 18px;
+  padding: 1px 6px;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.history-day-list-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.history-day {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.history-day-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .empty-state {
   padding: 28px;
   border-radius: 18px;
@@ -648,6 +755,10 @@ code {
 
   .side-menu.open {
     display: grid;
+  }
+
+  .travel-dates-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -726,12 +837,12 @@ code {
     gap: 4px;
     padding: 4px;
     flex-wrap: nowrap;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .nav-list::before {
     inset: 4px auto 4px 4px;
-    width: calc((100% - 8px) / 4);
+    width: calc((100% - 8px) / 6);
   }
 
   .nav-list:has(a.active[href='#/dishes'])::before {
@@ -742,8 +853,16 @@ code {
     transform: translateX(200%);
   }
 
-  .nav-list:has(a.active[href='#/profile'])::before {
+  .nav-list:has(a.active[href='#/travel'])::before {
     transform: translateX(300%);
+  }
+
+  .nav-list:has(a.active[href='#/history'])::before {
+    transform: translateX(400%);
+  }
+
+  .nav-list:has(a.active[href='#/profile'])::before {
+    transform: translateX(500%);
   }
 
   .nav-list a {

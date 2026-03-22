@@ -51,18 +51,33 @@ const state = {
   movies: [],
   myMovies: [],
   randomMovie: null,
+  travels: [],
+  myTravels: [],
+  randomTravel: null,
+  history: [],
   dishesStatus: '',
   moviesStatus: '',
+  travelsStatus: '',
+  historyStatus: '',
   dishesView: 'all',
   moviesView: 'all',
+  travelsView: 'all',
   showDishForm: false,
   showMovieForm: false,
+  showTravelForm: false,
   dishMediaMode: 'link',
   movieMediaMode: 'link',
+  travelMediaMode: 'link',
   editingDishId: '',
   editingMovieId: '',
+  editingTravelId: '',
   dishDraft: { name: '', photo: '' },
   movieDraft: { name: '', photo: '' },
+  travelDraft: { name: '', photo: '', dateStart: '', dateEnd: '' },
+  historyMonthCursor: (() => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  })(),
   editorContext: null,
   profileEditorMode: 'link',
   profilePhotoPreviewUrl: '',
@@ -79,6 +94,8 @@ const routes = {
   '/': renderHome,
   '/dishes': renderDishesPage,
   '/movies': renderMoviesPage,
+  '/travel': renderTravelPage,
+  '/history': renderHistoryPage,
   '/editor': renderEditorPage,
   '/profile': renderProfilePage,
 };
@@ -256,18 +273,26 @@ async function refreshProtectedData() {
     state.movies = [];
     state.myMovies = [];
     state.randomMovie = null;
+    state.travels = [];
+    state.myTravels = [];
+    state.randomTravel = null;
+    state.history = [];
     state.dishesStatus = '';
     state.moviesStatus = '';
+    state.travelsStatus = '';
+    state.historyStatus = '';
     render();
     return;
   }
 
   state.dishesStatus = 'Loading dishes...';
   state.moviesStatus = 'Loading movies...';
+  state.travelsStatus = 'Loading travel destinations...';
+  state.historyStatus = 'Loading history...';
   render();
 
   try {
-    const [users, dishes, myDishes, randomDish, movies, myMovies, randomMovie] = await Promise.all([
+    const [users, dishes, myDishes, randomDish, movies, myMovies, randomMovie, travels, myTravels, randomTravel, history] = await Promise.all([
       apiRequest(endpoints.listUsers).catch(() => []),
       apiRequest(endpoints.dishes),
       apiRequest(endpoints.myDishes).catch((error) => ({ error: error.message })),
@@ -275,6 +300,10 @@ async function refreshProtectedData() {
       apiRequest(endpoints.movies),
       apiRequest(endpoints.myMovies).catch((error) => ({ error: error.message })),
       apiRequest(endpoints.randomMovie).catch(() => null),
+      apiRequest(endpoints.travels),
+      apiRequest(endpoints.myTravels).catch((error) => ({ error: error.message })),
+      apiRequest(endpoints.randomTravel).catch(() => null),
+      apiRequest(endpoints.history).catch((error) => ({ error: error.message })),
     ]);
 
     const normalizedUsers = DataMapper.normalizeUsers(users);
@@ -325,22 +354,30 @@ async function refreshProtectedData() {
     state.movies = DataMapper.normalizeItems(movies);
     state.myMovies = DataMapper.normalizeItems(myMovies);
     state.randomMovie = DataMapper.normalizeItem(normalizeSingleItem(randomMovie));
+    state.travels = DataMapper.normalizeItems(travels);
+    state.myTravels = DataMapper.normalizeItems(myTravels);
+    state.randomTravel = DataMapper.normalizeItem(normalizeSingleItem(randomTravel));
+    state.history = DataMapper.normalizeItems(history);
     state.dishesStatus = myDishes?.error ? `All dishes loaded. ${myDishes.error}` : '';
     state.moviesStatus = myMovies?.error ? `All movies loaded. ${myMovies.error}` : '';
+    state.travelsStatus = myTravels?.error ? `All travel destinations loaded. ${myTravels.error}` : '';
+    state.historyStatus = history?.error ? `History loaded with warnings. ${history.error}` : '';
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     state.dishesStatus = `Unable to load dishes. ${message}`;
     state.moviesStatus = `Unable to load movies. ${message}`;
+    state.travelsStatus = `Unable to load travel destinations. ${message}`;
+    state.historyStatus = `Unable to load history. ${message}`;
   }
 
   render();
 }
 
 function currentSectionItems(kind) {
-  const allItems = kind === 'dishes' ? state.dishes : state.movies;
-  const myItems = kind === 'dishes' ? state.myDishes : state.myMovies;
-  const randomItem = kind === 'dishes' ? state.randomDish : state.randomMovie;
-  const view = kind === 'dishes' ? state.dishesView : state.moviesView;
+  const allItems = kind === 'dishes' ? state.dishes : kind === 'movies' ? state.movies : state.travels;
+  const myItems = kind === 'dishes' ? state.myDishes : kind === 'movies' ? state.myMovies : state.myTravels;
+  const randomItem = kind === 'dishes' ? state.randomDish : kind === 'movies' ? state.randomMovie : state.randomTravel;
+  const view = kind === 'dishes' ? state.dishesView : kind === 'movies' ? state.moviesView : state.travelsView;
 
   if (view === 'mine') {
     return myItems;
@@ -356,7 +393,9 @@ function currentSectionItems(kind) {
 function getAllKnownItems(kind) {
   const collections = kind === 'dishes'
     ? [state.dishes, state.myDishes, state.randomDish ? [state.randomDish] : []]
-    : [state.movies, state.myMovies, state.randomMovie ? [state.randomMovie] : []];
+    : kind === 'movies'
+      ? [state.movies, state.myMovies, state.randomMovie ? [state.randomMovie] : []]
+      : [state.travels, state.myTravels, state.randomTravel ? [state.randomTravel] : []];
 
   const seen = new Map();
   collections.flat().forEach((item) => {
@@ -504,6 +543,8 @@ function pageTemplate(content) {
                   <li><a class="${logoActive}" href="#/" aria-label="Home" title="Home">🏡</a></li>
                   <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes" aria-label="Dishes" title="Dishes">🍽️</a></li>
                   <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies" aria-label="Movies" title="Movies">🎬</a></li>
+                  <li><a class="${state.route === '/travel' ? 'active' : ''}" href="#/travel" aria-label="Travel" title="Travel">✈️</a></li>
+                  <li><a class="${state.route === '/history' ? 'active' : ''}" href="#/history" aria-label="History" title="History">📅</a></li>
                   <li><a class="${state.route === '/profile' ? 'active' : ''} nav-avatar-link" href="#/profile" aria-label="Profile" title="Profile">${renderUserIdentity(state.name || 'User')}</a></li>
                 </ul>
               </nav>
@@ -532,6 +573,7 @@ function renderHome() {
               <div data-profile-text ${profileTextStyle}>
                 <strong>${escapeHtml(state.name || 'User')}</strong>
               </div>
+              <button class="button secondary" type="button" data-go-route="/history">Open history calendar</button>
             </div>
           </div>
           ${helloVideoUrl
@@ -550,7 +592,7 @@ function renderHome() {
         <span class="badge">FamilyApi access</span>
         <h1>${state.authMode === 'login' ? 'Login to FamilyApp' : 'Create your FamilyApp account'}</h1>
         <p class="muted">
-          The home page is now dedicated to authentication. Dishes and movies are available only after login.
+          The home page is now dedicated to authentication. Dishes, movies, travel, and history are available only after login.
         </p>
         <p class="muted">API status: ${escapeHtml(state.apiStatus || 'Waiting for login...')}</p>
       </div>
@@ -590,16 +632,18 @@ function renderEditorPage() {
       <section class="panel">
         <span class="badge">Editor</span>
         <h1>Item editor unavailable</h1>
-        <p class="muted">Select a dish or movie from the list first.</p>
+        <p class="muted">Select a dish, movie, or travel destination from the list first.</p>
         <button class="button primary" type="button" data-go-route="/dishes">Back to lists</button>
       </section>
     `);
   }
 
-  const kindLabel = context.kind === 'dishes' ? 'Dish' : 'Movie';
+  const kindLabel = context.kind === 'dishes' ? 'Dish' : context.kind === 'movies' ? 'Movie' : 'Travel destination';
   const image = resolveMediaUrl(context.photoDraft ?? item.Photo);
   const currentPhoto = context.photoDraft ?? item.Photo ?? '';
   const mediaMode = context.mediaMode || 'link';
+  const dateStartValue = String(context.dateStartDraft ?? item.DateStart ?? '').slice(0, 10);
+  const dateEndValue = String(context.dateEndDraft ?? item.DateEnd ?? '').slice(0, 10);
 
   return pageTemplate(`
     <section class="panel auth-layout editor-layout-surface">
@@ -628,11 +672,23 @@ function renderEditorPage() {
                 Photo path or URL
                 <input id="editor-link-input" name="image" type="text" value="${escapeAttribute(currentPhoto)}" />
               </label>`}
+          ${context.kind === 'travel'
+            ? `<div class="travel-dates-grid">
+                <label>
+                  Start date
+                  <input name="dateStart" type="date" value="${escapeAttribute(dateStartValue)}" />
+                </label>
+                <label>
+                  End date
+                  <input name="dateEnd" type="date" value="${escapeAttribute(dateEndValue)}" />
+                </label>
+              </div>`
+            : ''}
           ${context.status ? `<p class="message ${context.status.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(context.status)}</p>` : ''}
           <div class="row-actions">
             <button class="button primary" type="submit">Save changes</button>
             <button class="button danger" type="button" data-editor-delete="true">Delete item</button>
-            <button class="button ghost" type="button" data-go-route="${context.kind === 'dishes' ? '/dishes' : '/movies'}">Cancel</button>
+            <button class="button ghost" type="button" data-go-route="${context.kind === 'dishes' ? '/dishes' : context.kind === 'movies' ? '/movies' : '/travel'}">Cancel</button>
           </div>
         </form>
       </section>
@@ -712,10 +768,10 @@ function renderProfilePage() {
 }
 
 function renderCollectionPage({ kind, title, badge, status, itemField, imageField, imageLabel, inputPlaceholder, imagePlaceholder }) {
-  const view = kind === 'dishes' ? state.dishesView : state.moviesView;
-  const showForm = kind === 'dishes' ? state.showDishForm : state.showMovieForm;
-  const editingId = kind === 'dishes' ? state.editingDishId : state.editingMovieId;
-  const mediaMode = kind === 'dishes' ? state.dishMediaMode : state.movieMediaMode;
+  const view = kind === 'dishes' ? state.dishesView : kind === 'movies' ? state.moviesView : state.travelsView;
+  const showForm = kind === 'dishes' ? state.showDishForm : kind === 'movies' ? state.showMovieForm : state.showTravelForm;
+  const editingId = kind === 'dishes' ? state.editingDishId : kind === 'movies' ? state.editingMovieId : state.editingTravelId;
+  const mediaMode = kind === 'dishes' ? state.dishMediaMode : kind === 'movies' ? state.movieMediaMode : state.travelMediaMode;
   const items = currentSectionItems(kind);
   return pageTemplate(`
     <section class="panel collection-layout">
@@ -744,7 +800,7 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
         ${showForm ? `
           <form class="add-form" data-add-form="${kind}">
             <label>
-              ${title === 'Dishes' ? 'Dish name' : 'Movie title'}
+              ${title === 'Dishes' ? 'Dish name' : title === 'Movies' ? 'Movie title' : 'Destination'}
               <input name="primary" type="text" placeholder="${inputPlaceholder}" value="${escapeAttribute(getEditingValue(kind, itemField))}" required />
             </label>
             <div class="media-mode-switch">
@@ -760,11 +816,23 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
                   ${imageLabel}
                   <input name="image" type="url" placeholder="${imagePlaceholder}" value="${escapeAttribute(getEditingValue(kind, imageField))}" />
                 </label>`}
+            ${kind === 'travel'
+              ? `<div class="travel-dates-grid">
+                  <label>
+                    Start date
+                    <input name="dateStart" type="date" value="${escapeAttribute(getEditingValue(kind, 'DateStart'))}" />
+                  </label>
+                  <label>
+                    End date
+                    <input name="dateEnd" type="date" value="${escapeAttribute(getEditingValue(kind, 'DateEnd'))}" />
+                  </label>
+                </div>`
+              : ''}
             <button class="button primary" type="submit">${editingId ? 'Save changes' : 'Save'}</button>
           </form>
         ` : ''}
 
-        ${renderMediaList({ kind, items, itemField, imageField, emptyText: title === 'Dishes' ? 'No dishes to display.' : 'No movies to display.' })}
+        ${renderMediaList({ kind, items, itemField, imageField, emptyText: title === 'Dishes' ? 'No dishes to display.' : title === 'Movies' ? 'No movies to display.' : 'No travel destinations to display.' })}
       </div>
     </section>
   `);
@@ -772,22 +840,40 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
 
 function getEditingValue(kind, field) {
   const normalizedField = String(field || '').toLowerCase();
-  const draft = kind === 'dishes' ? state.dishDraft : state.movieDraft;
+  const draft = kind === 'dishes' ? state.dishDraft : kind === 'movies' ? state.movieDraft : state.travelDraft;
   if (normalizedField === 'name' && draft.name) {
     return draft.name;
   }
   if (normalizedField === 'photo' && draft.photo) {
     return draft.photo;
   }
+  if (normalizedField === 'datestart' && draft.dateStart) {
+    return draft.dateStart;
+  }
+  if (normalizedField === 'dateend' && draft.dateEnd) {
+    return draft.dateEnd;
+  }
 
   const collection = getAllKnownItems(kind);
-  const editingId = kind === 'dishes' ? state.editingDishId : state.editingMovieId;
+  const editingId = kind === 'dishes' ? state.editingDishId : kind === 'movies' ? state.editingMovieId : state.editingTravelId;
   const item = collection.find((entry) => getItemId(entry) === editingId);
-  return normalizedField === 'name' ? (item?.Name || '') : (item?.Photo || '');
+  if (normalizedField === 'name') {
+    return item?.Name || '';
+  }
+  if (normalizedField === 'photo') {
+    return item?.Photo || '';
+  }
+  if (normalizedField === 'datestart') {
+    return String(item?.DateStart || '').slice(0, 10);
+  }
+  if (normalizedField === 'dateend') {
+    return String(item?.DateEnd || '').slice(0, 10);
+  }
+  return '';
 }
 
 function updateCollectionDraft(kind, field, value) {
-  const target = kind === 'dishes' ? state.dishDraft : state.movieDraft;
+  const target = kind === 'dishes' ? state.dishDraft : kind === 'movies' ? state.movieDraft : state.travelDraft;
   target[field] = value;
 }
 
@@ -831,7 +917,15 @@ function renderMediaList({ kind, items, itemField, imageField, emptyText }) {
                 <div class="row-actions">
                   <button class="button secondary" type="button" data-edit-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}">Edit</button>
                   <button class="button danger" type="button" data-delete-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}">Delete</button>
+                  <button class="button primary" type="button" data-pick-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}">Pick</button>
+                  <button class="button secondary" type="button" data-pick-delete-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}">Pick & delete</button>
                 </div>
+                ${kind === 'travel'
+                  ? `<label class="inline-date">
+                      Date
+                      <input type="date" data-travel-date="${escapeAttribute(itemKey)}" />
+                    </label>`
+                  : ''}
               </div>
             </li>
           `;
@@ -869,6 +963,126 @@ function renderMoviesPage() {
   });
 }
 
+function renderTravelPage() {
+  return renderCollectionPage({
+    kind: 'travel',
+    title: 'Travel',
+    badge: 'Family adventures',
+    status: state.travelsStatus,
+    itemField: 'Name',
+    imageField: 'Photo',
+    imageLabel: 'Photo URL',
+    inputPlaceholder: 'Barcelona',
+    imagePlaceholder: 'https://example.com/travel.jpg',
+  });
+}
+
+function renderHistoryPage() {
+  return pageTemplate(`
+    <section class="panel collection-layout">
+      <div class="content-panel route-transition">
+        <div class="list-toolbar">
+          <div>
+            <h3>History calendar</h3>
+            <p class="muted">${escapeHtml(state.historyStatus || 'All picked items are shown by date (UTC).')}</p>
+          </div>
+        </div>
+        ${renderHistoryCalendar()}
+      </div>
+    </section>
+  `);
+}
+
+function renderHistoryCalendar() {
+  if (!state.history.length) {
+    return '<div class="empty-state">No history yet.</div>';
+  }
+
+  const grouped = new Map();
+  state.history.forEach((entry) => {
+    const dateKey = String(entry.DateStart || '').slice(0, 10) || 'Unknown date';
+    const list = grouped.get(dateKey) || [];
+    list.push(entry);
+    grouped.set(dateKey, list);
+  });
+
+  const cursor = new Date(state.historyMonthCursor);
+  const year = cursor.getUTCFullYear();
+  const month = cursor.getUTCMonth();
+  const monthStart = new Date(Date.UTC(year, month, 1));
+  const monthLabel = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const firstDayOfWeek = monthStart.getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const cells = [];
+  for (let i = 0; i < firstDayOfWeek; i += 1) {
+    cells.push(null);
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push(new Date(Date.UTC(year, month, day)));
+  }
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  const renderMarkers = (entries) => {
+    const colors = {
+      movie: '#8b5cf6',
+      dish: '#f59e0b',
+      travel: '#06b6d4',
+    };
+    const counts = new Map();
+    entries.forEach((entry) => {
+      const key = String(entry.Type || 'item').toLowerCase();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([type, count]) => `<span class="calendar-marker marker-${escapeAttribute(type)}" style="--marker-color:${colors[type] || '#94a3b8'};" title="${escapeAttribute(`${type}: ${count}`)}">${count}</span>`)
+      .join('');
+  };
+
+  return `
+    <div class="calendar-toolbar">
+      <button class="button secondary" type="button" data-history-nav="-1">←</button>
+      <strong>${escapeHtml(monthLabel)}</strong>
+      <button class="button secondary" type="button" data-history-nav="1">→</button>
+    </div>
+    <div class="calendar-legend">
+      <span><i style="background:#8b5cf6"></i> Movie</span>
+      <span><i style="background:#f59e0b"></i> Dish</span>
+      <span><i style="background:#06b6d4"></i> Travel</span>
+    </div>
+    <div class="history-calendar-grid">
+      ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => `<div class="calendar-weekday">${weekday}</div>`).join('')}
+      ${cells.map((date) => {
+        if (!date) {
+          return '<div class="calendar-day muted-day"></div>';
+        }
+        const key = date.toISOString().slice(0, 10);
+        const entries = grouped.get(key) || [];
+        return `
+          <div class="calendar-day">
+            <div class="calendar-day-number">${date.getUTCDate()}</div>
+            <div class="calendar-day-markers">${renderMarkers(entries)}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    <div class="history-day-list-panel">
+      ${Array.from(grouped.entries())
+        .filter(([day]) => day.startsWith(`${year}-${String(month + 1).padStart(2, '0')}-`))
+        .sort(([a], [b]) => (a > b ? 1 : -1))
+        .map(([day, entries]) => `
+          <section class="history-day">
+            <h4>${escapeHtml(day)}</h4>
+            <ul class="history-day-list">
+              ${entries.map((entry) => `<li><span>${escapeHtml(entry.Type || 'item')}</span> · <strong>${escapeHtml(entry.Name || 'Untitled')}</strong></li>`).join('')}
+            </ul>
+          </section>
+        `).join('')}
+    </div>
+  `;
+}
+
 function render() {
   applyTheme();
   ensureProtectedRoute();
@@ -883,8 +1097,10 @@ function render() {
       state.apiStatus = '';
       state.showDishForm = false;
       state.showMovieForm = false;
+      state.showTravelForm = false;
       state.editingDishId = '';
       state.editingMovieId = '';
+      state.editingTravelId = '';
       setProfilePhotoPreviewUrl('');
       await refreshProtectedData();
       await hydrateWelcomeMedia();
@@ -930,10 +1146,15 @@ function render() {
         if (state.dishesView === 'random') {
           state.randomDish = DataMapper.normalizeItem(normalizeSingleItem(await apiRequest(endpoints.randomDish).catch(() => state.randomDish)));
         }
-      } else {
+      } else if (kind === 'movies') {
         state.moviesView = viewName || 'all';
         if (state.moviesView === 'random') {
           state.randomMovie = DataMapper.normalizeItem(normalizeSingleItem(await apiRequest(endpoints.randomMovie).catch(() => state.randomMovie)));
+        }
+      } else {
+        state.travelsView = viewName || 'all';
+        if (state.travelsView === 'random') {
+          state.randomTravel = DataMapper.normalizeItem(normalizeSingleItem(await apiRequest(endpoints.randomTravel).catch(() => state.randomTravel)));
         }
       }
       state.collectionMenuOpen = false;
@@ -954,8 +1175,10 @@ function render() {
       const mode = button.getAttribute('data-media-mode') || 'link';
       if (kind === 'dishes') {
         state.dishMediaMode = mode;
-      } else {
+      } else if (kind === 'movies') {
         state.movieMediaMode = mode;
+      } else {
+        state.travelMediaMode = mode;
       }
       render();
     });
@@ -970,11 +1193,17 @@ function render() {
         if (!state.showDishForm) {
           state.dishDraft = { name: '', photo: '' };
         }
-      } else {
+      } else if (kind === 'movies') {
         state.showMovieForm = !state.showMovieForm;
         state.editingMovieId = state.showMovieForm ? state.editingMovieId : '';
         if (!state.showMovieForm) {
           state.movieDraft = { name: '', photo: '' };
+        }
+      } else {
+        state.showTravelForm = !state.showTravelForm;
+        state.editingTravelId = state.showTravelForm ? state.editingTravelId : '';
+        if (!state.showTravelForm) {
+          state.travelDraft = { name: '', photo: '', dateStart: '', dateEnd: '' };
         }
       }
       render();
@@ -1023,6 +1252,31 @@ function render() {
     });
   });
 
+  document.querySelectorAll('[data-pick-kind]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const kind = button.getAttribute('data-pick-kind');
+      const itemKey = button.getAttribute('data-item-key') || '';
+      await handlePickItem(kind || '', itemKey, false);
+    });
+  });
+
+  document.querySelectorAll('[data-pick-delete-kind]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const kind = button.getAttribute('data-pick-delete-kind');
+      const itemKey = button.getAttribute('data-item-key') || '';
+      await handlePickItem(kind || '', itemKey, true);
+    });
+  });
+
+  document.querySelectorAll('[data-history-nav]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const delta = Number(button.getAttribute('data-history-nav') || '0');
+      const cursor = new Date(state.historyMonthCursor);
+      state.historyMonthCursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + delta, 1)).toISOString();
+      render();
+    });
+  });
+
   document.querySelectorAll('[data-add-form]').forEach((form) => {
     form.addEventListener('submit', handleSaveItem);
     form.addEventListener('input', (event) => {
@@ -1039,6 +1293,12 @@ function render() {
       }
       if (target.name === 'image') {
         updateCollectionDraft(kind, 'photo', target.value);
+      }
+      if (target.name === 'dateStart') {
+        updateCollectionDraft(kind, 'dateStart', target.value);
+      }
+      if (target.name === 'dateEnd') {
+        updateCollectionDraft(kind, 'dateEnd', target.value);
       }
     });
   });
@@ -1205,6 +1465,8 @@ async function handleEditorFormSubmit(event) {
   const primary = String(formData.get('primary') || '').trim();
   const imageFile = formData.get('imageFile');
   const image = String(formData.get('image') || '').trim();
+  const dateStart = String(formData.get('dateStart') || '').trim();
+  const dateEnd = String(formData.get('dateEnd') || '').trim();
   const { kind, itemKey } = state.editorContext;
   const item = findItemByKey(kind, itemKey);
   if (!item) {
@@ -1213,7 +1475,11 @@ async function handleEditorFormSubmit(event) {
 
   const id = getItemId(item);
   const endpoint = `/${kind}/${id}`;
-  const body = { name: primary, photo: image };
+  const body = {
+    ...(kind === 'travel' ? item : {}),
+    name: primary,
+    photo: image,
+  };
 
   try {
     if (imageFile instanceof File && imageFile.size > 0) {
@@ -1228,7 +1494,15 @@ async function handleEditorFormSubmit(event) {
 
     await apiRequest(endpoint, {
       method: 'PUT',
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...body,
+        ...(kind === 'travel'
+          ? {
+              dateStart: dateStart || item.DateStart || item.dateStart || '',
+              dateEnd: dateEnd || item.DateEnd || item.dateEnd || '',
+            }
+          : {}),
+      }),
     });
 
     state.editorContext.status = 'Item updated.';
@@ -1307,8 +1581,10 @@ async function handleSaveItem(event) {
   const primary = String(formData.get('primary') || '').trim();
   const imageFile = formData.get('imageFile');
   const image = String(formData.get('image') || '').trim();
+  const dateStart = String(formData.get('dateStart') || '').trim();
+  const dateEnd = String(formData.get('dateEnd') || '').trim();
 
-  const editingId = kind === 'dishes' ? state.editingDishId : state.editingMovieId;
+  const editingId = kind === 'dishes' ? state.editingDishId : kind === 'movies' ? state.editingMovieId : state.editingTravelId;
   const collection = getAllKnownItems(kind);
   const item = editingId ? collection.find((entry) => getItemId(entry) === editingId) : null;
 
@@ -1326,14 +1602,31 @@ async function handleSaveItem(event) {
 
     if (editingId && item) {
       const id = getItemId(item);
+      const travelPayload = kind === 'travel'
+        ? {
+            ...item,
+            name: primary,
+            photo: photoPath,
+            dateStart: dateStart || item.DateStart || item.dateStart || '',
+            dateEnd: dateEnd || item.DateEnd || item.dateEnd || '',
+          }
+        : { name: primary, photo: photoPath };
       await apiRequest(`/${kind}/${id}`, {
         method: 'PUT',
-        body: JSON.stringify({ name: primary, photo: photoPath }),
+        body: JSON.stringify(travelPayload),
       });
     } else {
+      const travelPayload = kind === 'travel'
+        ? {
+            name: primary,
+            photo: photoPath,
+            dateStart: dateStart ? `${dateStart}T00:00:00.000Z` : '',
+            dateEnd: dateEnd ? `${dateEnd}T23:59:59.000Z` : '',
+          }
+        : { name: primary, photo: photoPath };
       await apiRequest(`/${kind}`, {
         method: 'POST',
-        body: JSON.stringify({ name: primary, photo: photoPath }),
+        body: JSON.stringify(travelPayload),
       });
     }
 
@@ -1341,16 +1634,21 @@ async function handleSaveItem(event) {
       state.showDishForm = false;
       state.editingDishId = '';
       state.dishDraft = { name: '', photo: '' };
-    } else {
+    } else if (kind === 'movies') {
       state.showMovieForm = false;
       state.editingMovieId = '';
       state.movieDraft = { name: '', photo: '' };
+    } else {
+      state.showTravelForm = false;
+      state.editingTravelId = '';
+      state.travelDraft = { name: '', photo: '', dateStart: '', dateEnd: '' };
     }
 
     await refreshProtectedData();
     render();
   } catch (error) {
-    state.apiStatus = `Unable to save ${kind === 'dishes' ? 'dish' : 'movie'}. ${error.message}`;
+    const label = kind === 'dishes' ? 'dish' : kind === 'movies' ? 'movie' : 'travel destination';
+    state.apiStatus = `Unable to save ${label}. ${error.message}`;
     render();
   }
 }
@@ -1366,6 +1664,8 @@ function openEditorPage(kind, itemKey, isPhotoEdit) {
     itemKey,
     primaryDraft: item.Name,
     photoDraft: isPhotoEdit ? null : item.Photo,
+    dateStartDraft: String(item.DateStart || '').slice(0, 10),
+    dateEndDraft: String(item.DateEnd || '').slice(0, 10),
     mediaMode: isPhotoEdit ? 'file' : null,
     status: '',
   };
@@ -1393,6 +1693,48 @@ async function handleDeleteItem(kind, itemKey, isEditor) {
     state.apiStatus = `Failed to delete item: ${error.message}`;
   }
   render();
+}
+
+function readTravelDate(itemKey) {
+  const dateInput = document.querySelector(`[data-travel-date="${CSS.escape(itemKey)}"]`);
+  return dateInput instanceof HTMLInputElement ? dateInput.value : '';
+}
+
+async function handlePickItem(kind, itemKey, deleteAfterPick) {
+  const item = findItemByKey(kind, itemKey);
+  if (!item) {
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  const travelDate = kind === 'travel' ? readTravelDate(itemKey) : '';
+  const travelStartIso = travelDate ? `${travelDate}T00:00:00.000Z` : nowIso;
+  const travelEndIso = travelDate ? `${travelDate}T23:59:59.000Z` : nowIso;
+
+  const payload = {
+    name: item.Name || '',
+    photo: item.Photo || '',
+    dateStart: kind === 'travel' ? travelStartIso : nowIso,
+    dateEnd: kind === 'travel' ? travelEndIso : nowIso,
+    type: kind === 'dishes' ? 'dish' : kind === 'movies' ? 'movie' : 'travel',
+  };
+
+  try {
+    await apiRequest(endpoints.history, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (deleteAfterPick) {
+      await handleDeleteItem(kind, itemKey);
+      return;
+    }
+    state.apiStatus = 'Added to history.';
+    await refreshProtectedData();
+    render();
+  } catch (error) {
+    state.apiStatus = `Unable to add to history. ${error.message}`;
+    render();
+  }
 }
 
 function escapeHtml(text) {

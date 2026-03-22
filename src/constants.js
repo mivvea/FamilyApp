@@ -14,4 +14,8 @@ export const endpoints = Object.freeze({
   movies: '/Movies',
   myMovies: '/Movies/my',
   randomMovie: '/Movies/random',
+  travels: '/Travel',
+  myTravels: '/Travel/my',
+  randomTravel: '/Travel/random',
+  history: '/History',
 });
