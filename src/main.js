@@ -729,8 +729,10 @@ function renderAddedBy(item) {
   const explicitPhotoUrl = resolveMediaUrl(getAddedByPhotoPath(item));
   const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
   const avatarUrl = explicitPhotoUrl || (name === state.name ? userPhotoUrl : '');
+  const addedByBackground = getAddedByBackground(item);
+  const styleAttribute = addedByBackground ? ` style="background:${escapeAttribute(addedByBackground)};"` : '';
   return `
-    <span class="meta-tag meta-user">
+    <span class="meta-tag meta-user"${styleAttribute}>
       ${avatarUrl
         ? `<img class="meta-avatar" src="${escapeAttribute(avatarUrl)}" alt="${escapeAttribute(name)}" />`
         : `<span class="meta-avatar meta-avatar-fallback">${escapeHtml((name || 'U').slice(0, 1).toUpperCase())}</span>`}
