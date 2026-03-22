@@ -924,6 +924,12 @@ code {
   color: inherit;
 }
 
+:root[data-theme='light'] .user-profile-surface,
+:root[data-theme='light'] .user-profile-surface [data-profile-text],
+:root[data-theme='light'] .user-profile-surface [data-profile-text] strong {
+  color: inherit;
+}
+
 :root[data-theme='light'] .topbar-main {
   background:
     linear-gradient(130deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.18)),
@@ -958,10 +964,22 @@ code {
   color: inherit;
 }
 
+:root[data-theme='light'] .media-row,
+:root[data-theme='light'] .media-row strong,
+:root[data-theme='light'] .media-row .muted,
+:root[data-theme='light'] .media-row .small-text,
+:root[data-theme='light'] .media-row .row-actions .button {
+  color: var(--media-row-added-color, #3f3121);
+}
+
 :root[data-theme='light'] .row-actions .button {
   background: rgba(255, 248, 235, 0.92);
   border: 1px solid rgba(141, 112, 70, 0.2);
   color: #4f3f2a;
+}
+
+:root[data-theme='light'] .media-row .row-actions .button {
+  color: var(--media-row-added-color, #3f3121);
 }
 
 :root[data-theme='light'] .row-actions .button.danger {
