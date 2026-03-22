@@ -116,15 +116,19 @@ input {
   content: '';
   position: absolute;
   inset: 6px auto 6px 6px;
-  width: calc(50% - 9px);
+  width: calc((100% - 12px) / 3);
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(72, 131, 255, 0.45), rgba(123, 97, 255, 0.42));
   transition: transform 240ms ease;
   pointer-events: none;
 }
 
-.nav-list:has(a.active[href='#/movies'])::before {
+.nav-list:has(a.active[href='#/dishes'])::before {
   transform: translateX(calc(100% + 6px));
+}
+
+.nav-list:has(a.active[href='#/movies'])::before {
+  transform: translateX(calc((100% + 6px) * 2));
 }
 
 .nav-list a {
@@ -637,11 +641,15 @@ code {
 
   .nav-list::before {
     inset: 4px auto 4px 4px;
-    width: calc(50% - 6px);
+    width: calc((100% - 8px) / 3);
+  }
+
+  .nav-list:has(a.active[href='#/dishes'])::before {
+    transform: translateX(calc(100% + 4px));
   }
 
   .nav-list:has(a.active[href='#/movies'])::before {
-    transform: translateX(calc(100% + 4px));
+    transform: translateX(calc((100% + 4px) * 2));
   }
 
   .nav-list a {
@@ -786,38 +794,60 @@ code {
   font-weight: 700;
 }
 
+:root[data-theme='light'] {
+  color: #3a2f22;
+  background: #f6efe1;
+}
+
+:root[data-theme='light'] body {
+  background:
+    radial-gradient(circle at top, rgba(244, 214, 166, 0.4), transparent 42%),
+    linear-gradient(180deg, #fbf4e7 0%, #f1e4cf 100%);
+}
+
+:root[data-theme='light'] .panel,
+:root[data-theme='light'] .auth-card,
+:root[data-theme='light'] .profile-card,
+:root[data-theme='light'] .topbar-main,
+:root[data-theme='light'] .brand-panel,
+:root[data-theme='light'] .side-menu,
+:root[data-theme='light'] .media-row {
+  background: rgba(255, 248, 235, 0.9);
+  border-color: rgba(178, 147, 105, 0.26);
+  color: #3f3121;
+}
+
+:root[data-theme='light'] .muted,
+:root[data-theme='light'] .side-link,
+:root[data-theme='light'] .mobile-filter-link,
+:root[data-theme='light'] .nav-list a,
+:root[data-theme='light'] label,
+:root[data-theme='light'] h1,
+:root[data-theme='light'] h2,
+:root[data-theme='light'] h3,
+:root[data-theme='light'] strong {
+  color: #5b4b33;
+}
+
+:root[data-theme='light'] .nav-list {
+  background: rgba(182, 149, 102, 0.16);
+}
+
+:root[data-theme='light'] input {
+  background: rgba(103, 81, 48, 0.08);
+  border-color: rgba(141, 112, 70, 0.22);
+  color: #4f3f2a;
+}
+
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme='dark']) {
     color: #3a2f22;
     background: #f6efe1;
   }
 
-  body {
+  :root:not([data-theme='dark']) body {
     background:
       radial-gradient(circle at top, rgba(244, 214, 166, 0.4), transparent 42%),
       linear-gradient(180deg, #fbf4e7 0%, #f1e4cf 100%);
-  }
-
-  .panel,
-  .auth-card,
-  .profile-card,
-  .topbar-main,
-  .brand-panel,
-  .side-menu,
-  .media-row {
-    background: rgba(255, 248, 235, 0.86);
-    border-color: rgba(178, 147, 105, 0.26);
-    color: #3f3121;
-  }
-
-  .muted,
-  .side-link,
-  .mobile-filter-link,
-  .nav-list a {
-    color: #6e5b40;
-  }
-
-  .nav-list {
-    background: rgba(182, 149, 102, 0.16);
   }
 }

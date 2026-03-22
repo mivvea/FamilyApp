@@ -29,6 +29,7 @@ function removeStorage(key) {
 }
 
 const initialStoredName = readStorage('familyapp.name');
+const initialStoredTheme = readStorage('familyapp.theme') || 'dark';
 
 const state = {
   route: window.location.hash.replace(/^#/, '') || '/',
@@ -63,6 +64,7 @@ const state = {
   profilePasswordDraft: '',
   profileStatus: '',
   collectionMenuOpen: false,
+  theme: initialStoredTheme === 'light' ? 'light' : 'dark',
 };
 
 const routes = {
@@ -351,19 +353,18 @@ function renderUserIdentity(name) {
 }
 
 function pageTemplate(content) {
+  const logoActive = state.route === '/' ? 'active' : '';
   return `
     <div class="app-shell">
       <header class="topbar">
-        <a class="brand-panel" href="#/">
-          <span class="brand" aria-label="FamilyApp home" title="FamilyApp">🏡</span>
-        </a>
         ${isSignedIn()
           ? `
             <div class="topbar-main">
               <nav class="topbar-nav">
                 <ul class="nav-list">
-                  <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes">Dish</a></li>
-                  <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies">Movie</a></li>
+                  <li><a class="${logoActive}" href="#/" aria-label="Home" title="Home">🏡</a></li>
+                  <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes" aria-label="Dishes" title="Dishes">🍽️</a></li>
+                  <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies" aria-label="Movies" title="Movies">🎬</a></li>
                 </ul>
               </nav>
               <div class="topbar-actions">
@@ -535,6 +536,7 @@ function renderProfilePage() {
               </label>`}
           ${state.profileStatus ? `<p class="message ${state.profileStatus.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(state.profileStatus)}</p>` : ''}
           <div class="row-actions">
+            <button class="button secondary" type="button" data-theme-toggle="true">${state.theme === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}</button>
             <button class="button primary" type="submit">Save profile</button>
             <button class="button danger" type="button" data-action="logout">Logout</button>
             <button class="button ghost" type="button" data-go-route="/">Back home</button>
@@ -703,6 +705,7 @@ function renderMoviesPage() {
 }
 
 function render() {
+  applyTheme();
   ensureProtectedRoute();
   const view = routes[state.route] || renderHome;
   app.innerHTML = view();
@@ -775,6 +778,14 @@ function render() {
   document.querySelectorAll('[data-toggle-side-menu]').forEach((button) => {
     button.addEventListener('click', () => {
       state.collectionMenuOpen = !state.collectionMenuOpen;
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.theme = state.theme === 'light' ? 'dark' : 'light';
+      writeStorage('familyapp.theme', state.theme);
       render();
     });
   });
@@ -1155,6 +1166,10 @@ function escapeHtml(text) {
 
 function escapeAttribute(text) {
   return escapeHtml(text).replace(/\'/g, '&#39;').replace(/\\/g, '&#92;').replace(/\`/g, '&#96;');
+}
+
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', state.theme);
 }
 
 // Ensure data is loaded on page load if signed in
