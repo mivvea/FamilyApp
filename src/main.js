@@ -572,7 +572,7 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
           <div>
             <h3>${view === 'all' ? `All ${title.toLowerCase()}` : view === 'mine' ? `My ${title.toLowerCase()}` : `Random ${title.toLowerCase().slice(0, -1)}`}</h3>
           </div>
-          <button class="button primary add-item-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+ Add new ${title.toLowerCase().slice(0, -1)}</button>
+          <button class="button primary add-item-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
         </div>
 
         ${showForm ? `
