@@ -909,9 +909,16 @@ code {
 :root[data-theme='light'] .auth-card,
 :root[data-theme='light'] .topbar-main,
 :root[data-theme='light'] .brand-panel,
-:root[data-theme='light'] .side-menu,
-:root[data-theme='light'] .media-row {
+:root[data-theme='light'] .side-menu {
   background: rgba(255, 248, 235, 0.9);
+  border-color: rgba(178, 147, 105, 0.26);
+  color: var(--media-row-added-color, #3f3121);
+}
+
+:root[data-theme='light'] .media-row {
+  background:
+    linear-gradient(130deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.18)),
+    linear-gradient(120deg, var(--media-row-added-background, rgba(255, 248, 235, 0.9)), rgba(241, 228, 207, 0.86));
   border-color: rgba(178, 147, 105, 0.26);
   color: var(--media-row-added-color, #3f3121);
 }
