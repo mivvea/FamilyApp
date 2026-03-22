@@ -101,9 +101,10 @@ input {
 
 .nav-list {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
-  gap: 12px;
+  gap: 0;
   list-style: none;
   margin: 0;
   padding: 6px;
@@ -116,7 +117,7 @@ input {
   content: '';
   position: absolute;
   inset: 6px auto 6px 6px;
-  width: calc((100% - 12px) / 3);
+  width: calc((100% - 12px) / 4);
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(72, 131, 255, 0.45), rgba(123, 97, 255, 0.42));
   transition: transform 240ms ease;
@@ -131,11 +132,15 @@ input {
   transform: translateX(calc((100% + 6px) * 2));
 }
 
+.nav-list:has(a.active[href='#/profile'])::before {
+  transform: translateX(calc((100% + 6px) * 3));
+}
+
 .nav-list a {
   position: relative;
   z-index: 1;
   padding: 12px 28px;
-  min-height: 50px;
+  min-height: 56px;
   border-radius: 14px;
   color: #98a7d5;
   background: transparent;
@@ -143,7 +148,13 @@ input {
   align-items: center;
   justify-content: center;
   font-weight: 700;
+  font-size: 1.35rem;
   transition: color 220ms ease;
+}
+
+.nav-avatar-link {
+  padding: 6px;
+  font-size: 1rem;
 }
 
 .nav-list a.active,
@@ -343,6 +354,22 @@ input::placeholder {
   background: transparent;
   color: #b6c2eb;
   font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.mobile-filter-link {
+  border: 0;
+  border-radius: 12px;
+  min-height: 40px;
+  padding: 8px 10px;
+  font-weight: 700;
+  color: #b6c2eb;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mobile-filter-link.active {
+  color: #fff;
+  background: rgba(72, 131, 255, 0.22);
 }
 
 .mobile-filter-link {
@@ -637,11 +664,12 @@ code {
     gap: 4px;
     padding: 4px;
     flex-wrap: nowrap;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .nav-list::before {
     inset: 4px auto 4px 4px;
-    width: calc((100% - 8px) / 3);
+    width: calc((100% - 8px) / 4);
   }
 
   .nav-list:has(a.active[href='#/dishes'])::before {
@@ -650,6 +678,10 @@ code {
 
   .nav-list:has(a.active[href='#/movies'])::before {
     transform: translateX(calc((100% + 4px) * 2));
+  }
+
+  .nav-list:has(a.active[href='#/profile'])::before {
+    transform: translateX(calc((100% + 4px) * 3));
   }
 
   .nav-list a {
@@ -733,8 +765,9 @@ code {
 }
 
 .user-mini-photo {
-  width: 130px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   object-fit: cover;
   display: block;
   background: rgba(255, 255, 255, 0.08);
@@ -821,6 +854,7 @@ code {
 :root[data-theme='light'] .side-link,
 :root[data-theme='light'] .mobile-filter-link,
 :root[data-theme='light'] .nav-list a,
+:root[data-theme='light'] .meta-tag,
 :root[data-theme='light'] label,
 :root[data-theme='light'] h1,
 :root[data-theme='light'] h2,
@@ -831,6 +865,20 @@ code {
 
 :root[data-theme='light'] .nav-list {
   background: rgba(182, 149, 102, 0.16);
+}
+
+:root[data-theme='light'] .meta-tag {
+  background: rgba(113, 85, 45, 0.18);
+}
+
+:root[data-theme='light'] .row-actions .button {
+  background: rgba(98, 72, 40, 0.18);
+  color: #4f3f2a;
+}
+
+:root[data-theme='light'] .row-actions .button.danger {
+  background: rgba(150, 86, 86, 0.22);
+  color: #5e2f2f;
 }
 
 :root[data-theme='light'] input {

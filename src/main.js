@@ -347,8 +347,8 @@ function renderUserIdentity(name) {
   const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
   return `
       ${userPhotoUrl
-        ? `<img class="user-mini-photo" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
-        : `<span class="user-mini-photo user-mini-fallback">${escapeHtml(name.slice(0, 1).toUpperCase())}</span>`}
+        ? `<img class="user-mini-photo nav-avatar" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
+        : `<span class="user-mini-photo user-mini-fallback nav-avatar">${escapeHtml(name.slice(0, 1).toUpperCase())}</span>`}
   `;
 }
 
@@ -365,11 +365,9 @@ function pageTemplate(content) {
                   <li><a class="${logoActive}" href="#/" aria-label="Home" title="Home">🏡</a></li>
                   <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes" aria-label="Dishes" title="Dishes">🍽️</a></li>
                   <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies" aria-label="Movies" title="Movies">🎬</a></li>
+                  <li><a class="${state.route === '/profile' ? 'active' : ''} nav-avatar-link" href="#/profile" aria-label="Profile" title="Profile">${renderUserIdentity(state.name || 'User')}</a></li>
                 </ul>
               </nav>
-              <div class="topbar-actions">
-                <button class="user-pill" type="button" data-edit-user-photo="true">${renderUserIdentity(state.name || 'User')}</button>
-              </div>
             </div>`
           : '<span class="muted">Sign in to browse your family lists.</span>'}
       </header>
@@ -564,9 +562,9 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
 
       <aside class="side-menu ${state.collectionMenuOpen ? 'open' : ''}">
         <h2>${badge}</h2>
-        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All</button>
-        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only mine</button>
-        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Proposition</button>
+        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">ALL</button>
+        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">MINE</button>
+        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">PROP</button>
       </aside>
 
       <div class="content-panel route-transition">
