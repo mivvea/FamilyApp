@@ -463,6 +463,25 @@ function parseUtcDateKey(value) {
   return formatLocalDateKey(parsed);
 }
 
+function parseUtcDateTime(value) {
+  const source = String(value || '').trim();
+  if (!source) {
+    return null;
+  }
+  const parsed = new Date(source);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed;
+  }
+
+  const dateOnlyMatch = source.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (!dateOnlyMatch) {
+    return null;
+  }
+
+  const fallback = new Date(`${dateOnlyMatch[1]}T00:00:00.000Z`);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
+
 function dateKeyToLocalDate(dateKey) {
   if (!dateKey) {
     return null;
@@ -477,6 +496,93 @@ function dateDiffInDays(startDate, endDate) {
   }
   const millis = endDate.getTime() - startDate.getTime();
   return Math.max(1, Math.floor(millis / 86400000) + 1);
+}
+
+function areDatesConsecutive(startDate, endDate) {
+  if (!startDate || !endDate) {
+    return false;
+  }
+  const millis = startDate.getTime() - endDate.getTime();
+  return millis <= 86400000;
+}
+
+function buildHistoryEntries() {
+  const normalizedEntries = state.history
+    .map((entry) => {
+      const kind = historyTypeToKind(entry.Type);
+      const startKey = parseUtcDateKey(entry.DateStart);
+      const endKey = parseUtcDateKey(entry.DateEnd) || startKey;
+      if (!startKey || !endKey) {
+        return null;
+      }
+
+      const startDate = dateKeyToLocalDate(startKey);
+      const endDate = dateKeyToLocalDate(endKey);
+      if (!startDate || !endDate) {
+        return null;
+      }
+
+      const startAt = parseUtcDateTime(entry.DateStart) || parseUtcDateTime(entry.DateEnd) || startDate;
+      const endAt = parseUtcDateTime(entry.DateEnd) || parseUtcDateTime(entry.DateStart) || endDate;
+      const normalizedStartDate = startDate <= endDate ? startDate : endDate;
+      const normalizedEndDate = startDate <= endDate ? endDate : startDate;
+      const normalizedStartAt = startAt <= endAt ? startAt : endAt;
+      const normalizedEndAt = startAt <= endAt ? endAt : startAt;
+      const normalizedStartKey = formatLocalDateKey(normalizedStartDate);
+      const normalizedEndKey = formatLocalDateKey(normalizedEndDate);
+      const title = String(entry.Name || 'Untitled').trim() || 'Untitled';
+      const photo = extractPathValue(entry.Photo || entry.photo);
+      const groupKey = [kind, title.toLowerCase(), photo].join('::');
+
+      return {
+        entry,
+        groupKey,
+        kind,
+        itemKey: resolveHistoryEntryItemKey(entry, kind),
+        startKey: normalizedStartKey,
+        endKey: normalizedEndKey,
+        startDate: normalizedStartDate,
+        endDate: normalizedEndDate,
+        startAt: normalizedStartAt,
+        endAt: normalizedEndAt,
+        durationDays: dateDiffInDays(normalizedStartDate, normalizedEndDate),
+        title,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      if (left.startKey !== right.startKey) {
+        return left.startKey.localeCompare(right.startKey);
+      }
+      return left.title.localeCompare(right.title);
+    });
+
+  const mergedEntries = [];
+  normalizedEntries.forEach((entry) => {
+    const previous = mergedEntries[mergedEntries.length - 1];
+    const canMerge = previous
+      && previous.groupKey === entry.groupKey
+      && areDatesConsecutive(entry.startDate, previous.endDate);
+
+    if (!canMerge) {
+      mergedEntries.push({
+        ...entry,
+        historyKey: [entry.groupKey, entry.startKey, entry.endKey].join('::'),
+        sourceEntries: [entry],
+      });
+      return;
+    }
+
+    previous.endDate = previous.endDate >= entry.endDate ? previous.endDate : entry.endDate;
+    previous.endKey = formatLocalDateKey(previous.endDate);
+    previous.endAt = previous.endAt >= entry.endAt ? previous.endAt : entry.endAt;
+    previous.startAt = previous.startAt <= entry.startAt ? previous.startAt : entry.startAt;
+    previous.durationDays = dateDiffInDays(previous.startDate, previous.endDate);
+    previous.historyKey = [previous.groupKey, previous.startKey, previous.endKey].join('::');
+    previous.sourceEntries.push(entry);
+  });
+
+  return mergedEntries;
 }
 
 function resolveHistoryEntryItemKey(entry, kind) {
@@ -725,32 +831,49 @@ function renderHome() {
 
 function renderEditorPage() {
   const context = state.editorContext;
-  const item = context ? findItemByKey(context.kind, context.itemKey) : null;
+  const isHistoryEditor = context?.target === 'history';
+  const item = !isHistoryEditor && context ? findItemByKey(context.kind, context.itemKey) : null;
+  const historyEntry = isHistoryEditor ? context?.historyEntry : null;
 
-  if (!context || !item) {
+  if (!context || (!item && !historyEntry)) {
     return pageTemplate(`
       <section class="panel">
         <span class="badge">Editor</span>
         <h1>Item editor unavailable</h1>
-        <p class="muted">Select a dish, movie, or travel destination from the list first.</p>
+        <p class="muted">Select a dish, movie, travel destination, or history event first.</p>
         <button class="button primary" type="button" data-go-route="/dishes">Back to lists</button>
       </section>
     `);
   }
 
-  const kindLabel = context.kind === 'dishes' ? 'Dish' : context.kind === 'movies' ? 'Movie' : 'Travel destination';
-  const image = resolveMediaUrl(context.photoDraft ?? item.Photo);
-  const currentPhoto = context.photoDraft ?? item.Photo ?? '';
+  const kindLabel = isHistoryEditor
+    ? 'History event'
+    : context.kind === 'dishes'
+      ? 'Dish'
+      : context.kind === 'movies'
+        ? 'Movie'
+        : 'Travel destination';
+  const sourcePhoto = isHistoryEditor ? historyEntry?.entry?.Photo : item.Photo;
+  const image = resolveMediaUrl(context.photoDraft ?? sourcePhoto);
+  const currentPhoto = context.photoDraft ?? sourcePhoto ?? '';
   const mediaMode = context.mediaMode || 'link';
-  const dateStartValue = String(context.dateStartDraft ?? item.DateStart ?? '').slice(0, 10);
-  const dateEndValue = String(context.dateEndDraft ?? item.DateEnd ?? '').slice(0, 10);
+  const dateStartValue = String(context.dateStartDraft ?? '').slice(0, 16);
+  const dateEndValue = String(context.dateEndDraft ?? '').slice(0, 16);
+  const cancelRoute = isHistoryEditor
+    ? '/history'
+    : context.kind === 'dishes'
+      ? '/dishes'
+      : context.kind === 'movies'
+        ? '/movies'
+        : '/travel';
+  const previewName = isHistoryEditor ? historyEntry?.title : item.Name;
 
   return pageTemplate(`
     <section class="panel auth-layout editor-layout-surface">
       <div class="stack">
         <h1>Edit ${kindLabel.toLowerCase()}</h1>
         <button class="thumb-shell thumb-button editor-preview" type="button" data-editor-photo-click="true">
-          ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(item.Name || 'Preview')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
+          ${image ? `<img class="media-thumb" src="${escapeAttribute(image)}" alt="${escapeAttribute(previewName || 'Preview')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
         </button>
       </div>
       <section class="auth-card">
@@ -772,15 +895,15 @@ function renderEditorPage() {
                 Photo path or URL
                 <input id="editor-link-input" name="image" type="text" value="${escapeAttribute(currentPhoto)}" />
               </label>`}
-          ${context.kind === 'travel'
+          ${isHistoryEditor
             ? `<div class="travel-dates-grid">
                 <label>
-                  Start date
-                  <input name="dateStart" type="date" value="${escapeAttribute(dateStartValue)}" />
+                  Start (UTC)
+                  <input name="dateStart" type="datetime-local" value="${escapeAttribute(dateStartValue)}" />
                 </label>
                 <label>
-                  End date
-                  <input name="dateEnd" type="date" value="${escapeAttribute(dateEndValue)}" />
+                  End (UTC)
+                  <input name="dateEnd" type="datetime-local" value="${escapeAttribute(dateEndValue)}" />
                 </label>
               </div>`
             : ''}
@@ -788,7 +911,7 @@ function renderEditorPage() {
           <div class="row-actions">
             <button class="button primary" type="submit">Save changes</button>
             <button class="button danger" type="button" data-editor-delete="true">Delete item</button>
-            <button class="button ghost" type="button" data-go-route="${context.kind === 'dishes' ? '/dishes' : context.kind === 'movies' ? '/movies' : '/travel'}">Cancel</button>
+            <button class="button ghost" type="button" data-go-route="${cancelRoute}">Cancel</button>
           </div>
         </form>
       </section>
@@ -916,18 +1039,6 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
                   ${imageLabel}
                   <input name="image" type="url" placeholder="${imagePlaceholder}" value="${escapeAttribute(getEditingValue(kind, imageField))}" />
                 </label>`}
-            ${kind === 'travel'
-              ? `<div class="travel-dates-grid">
-                  <label>
-                    Start date
-                    <input name="dateStart" type="date" value="${escapeAttribute(getEditingValue(kind, 'DateStart'))}" />
-                  </label>
-                  <label>
-                    End date
-                    <input name="dateEnd" type="date" value="${escapeAttribute(getEditingValue(kind, 'DateEnd'))}" />
-                  </label>
-                </div>`
-              : ''}
             <button class="button primary" type="submit">${editingId ? 'Save changes' : 'Save'}</button>
           </form>
         ` : ''}
@@ -1104,39 +1215,7 @@ function renderHistoryCalendar() {
     return '<div class="empty-state">No history yet.</div>';
   }
 
-  const historyEntries = state.history
-    .map((entry) => {
-      const kind = historyTypeToKind(entry.Type);
-      const startKey = parseUtcDateKey(entry.DateStart);
-      const endKey = parseUtcDateKey(entry.DateEnd) || startKey;
-      if (!startKey || !endKey) {
-        return null;
-      }
-
-      const startDate = dateKeyToLocalDate(startKey);
-      const endDate = dateKeyToLocalDate(endKey);
-      if (!startDate || !endDate) {
-        return null;
-      }
-
-      const normalizedStartDate = startDate <= endDate ? startDate : endDate;
-      const normalizedEndDate = startDate <= endDate ? endDate : startDate;
-      const normalizedStartKey = formatLocalDateKey(normalizedStartDate);
-      const normalizedEndKey = formatLocalDateKey(normalizedEndDate);
-
-      return {
-        entry,
-        kind,
-        itemKey: resolveHistoryEntryItemKey(entry, kind),
-        startKey: normalizedStartKey,
-        endKey: normalizedEndKey,
-        startDate: normalizedStartDate,
-        endDate: normalizedEndDate,
-        durationDays: dateDiffInDays(normalizedStartDate, normalizedEndDate),
-        title: String(entry.Name || 'Untitled').trim() || 'Untitled',
-      };
-    })
-    .filter(Boolean);
+  const historyEntries = buildHistoryEntries();
 
   const cursor = new Date(state.historyMonthCursor);
   const year = cursor.getFullYear();
@@ -1169,11 +1248,11 @@ function renderHistoryCalendar() {
 
     return entries
       .map((historyItem) => {
-        const editAttributes = historyItem.kind && historyItem.itemKey
-          ? ` data-edit-kind="${escapeAttribute(historyItem.kind)}" data-item-key="${escapeAttribute(historyItem.itemKey)}"`
+        const editAttributes = historyItem.kind
+          ? ` data-history-entry-key="${escapeAttribute(historyItem.historyKey)}"`
           : '';
         const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
-        return historyItem.kind && historyItem.itemKey
+        return historyItem.kind
           ? `<button class="calendar-item-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${escapeHtml(historyItem.title)}</button>`
           : `<span class="calendar-item-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${escapeHtml(historyItem.title)}</span>`;
       })
@@ -1227,9 +1306,10 @@ function renderHistoryCalendar() {
           <section class="history-day">
             <h4>${escapeHtml(historyItem.startKey)} → ${escapeHtml(historyItem.endKey)}</h4>
             <ul class="history-day-list">
-              <li>
+              <li${historyItem.kind ? ` data-history-entry-key="${escapeAttribute(historyItem.historyKey)}"` : ''}>
                 <span>${escapeHtml(historyItem.entry.Type || 'item')}</span> ·
                 <strong>${escapeHtml(historyItem.title)}</strong> ·
+                ${escapeHtml(historyItem.startAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))} - ${escapeHtml(historyItem.endAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))} ·
                 ${historyItem.durationDays} day${historyItem.durationDays === 1 ? '' : 's'}
               </li>
             </ul>
@@ -1434,6 +1514,13 @@ function render() {
     });
   });
 
+  document.querySelectorAll('[data-history-entry-key]').forEach((element) => {
+    element.addEventListener('click', () => {
+      const groupKey = element.getAttribute('data-history-entry-key') || '';
+      openHistoryEditorPage(groupKey);
+    });
+  });
+
   document.querySelectorAll('[data-add-form]').forEach((form) => {
     form.addEventListener('submit', handleSaveItem);
     form.addEventListener('input', (event) => {
@@ -1540,6 +1627,22 @@ function render() {
       if (!state.editorContext) {
         return;
       }
+      if (state.editorContext.target === 'history') {
+        const historyEntry = state.editorContext.historyEntry;
+        const historyId = String(historyEntry?.entry?.id || historyEntry?.entry?.Id || '').trim();
+        if (!historyId) {
+          return;
+        }
+        try {
+          await apiRequest(`${endpoints.history}/${historyId}`, { method: 'DELETE' });
+          await refreshProtectedData();
+          navigate('/history');
+        } catch (error) {
+          state.editorContext.status = `Unable to delete history event. ${error.message}`;
+        }
+        render();
+        return;
+      }
       await handleDeleteItem(state.editorContext.kind, state.editorContext.itemKey, true);
     });
   }
@@ -1624,7 +1727,64 @@ async function handleEditorFormSubmit(event) {
   const image = String(formData.get('image') || '').trim();
   const dateStart = String(formData.get('dateStart') || '').trim();
   const dateEnd = String(formData.get('dateEnd') || '').trim();
-  const { kind, itemKey } = state.editorContext;
+  const { kind, itemKey, target } = state.editorContext;
+
+  if (target === 'history') {
+    const historyEntry = state.editorContext.historyEntry;
+    if (!historyEntry) {
+      return;
+    }
+    const historyId = String(historyEntry.entry.id || historyEntry.entry.Id || '').trim();
+    if (!historyId) {
+      state.editorContext.status = 'Unable to update history event. Missing history id.';
+      render();
+      return;
+    }
+
+    const parseLocalDateTimeToIso = (value, fallback) => {
+      if (!value) {
+        return fallback;
+      }
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? fallback : parsed.toISOString();
+    };
+
+    let photoPath = image;
+    if (imageFile instanceof File && imageFile.size > 0) {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', imageFile);
+      const uploadResponse = await apiRequest(endpoints.fileUpload, {
+        method: 'POST',
+        body: uploadFormData,
+      });
+      photoPath = uploadResponse.filePath;
+    }
+
+    const body = {
+      ...historyEntry.entry,
+      name: primary,
+      photo: photoPath,
+      dateStart: parseLocalDateTimeToIso(dateStart, historyEntry.entry.DateStart || new Date().toISOString()),
+      dateEnd: parseLocalDateTimeToIso(dateEnd, historyEntry.entry.DateEnd || new Date().toISOString()),
+      type: historyEntry.entry.Type || (kind === 'dishes' ? 'dish' : kind === 'movies' ? 'movie' : 'travel'),
+    };
+
+    try {
+      await apiRequest(`${endpoints.history}/${historyId}`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+      state.editorContext.status = 'History event updated.';
+      await refreshProtectedData();
+      navigate('/history');
+      render();
+    } catch (error) {
+      state.editorContext.status = `Unable to update history event. ${error.message}`;
+      render();
+    }
+    return;
+  }
+
   const item = findItemByKey(kind, itemKey);
   if (!item) {
     return;
@@ -1653,12 +1813,6 @@ async function handleEditorFormSubmit(event) {
       method: 'PUT',
       body: JSON.stringify({
         ...body,
-        ...(kind === 'travel'
-          ? {
-              dateStart: dateStart || item.DateStart || item.dateStart || '',
-              dateEnd: dateEnd || item.DateEnd || item.dateEnd || '',
-            }
-          : {}),
       }),
     });
 
@@ -1738,8 +1892,6 @@ async function handleSaveItem(event) {
   const primary = String(formData.get('primary') || '').trim();
   const imageFile = formData.get('imageFile');
   const image = String(formData.get('image') || '').trim();
-  const dateStart = String(formData.get('dateStart') || '').trim();
-  const dateEnd = String(formData.get('dateEnd') || '').trim();
 
   const editingId = kind === 'dishes' ? state.editingDishId : kind === 'movies' ? state.editingMovieId : state.editingTravelId;
   const collection = getAllKnownItems(kind);
@@ -1764,8 +1916,6 @@ async function handleSaveItem(event) {
             ...item,
             name: primary,
             photo: photoPath,
-            dateStart: dateStart || item.DateStart || item.dateStart || '',
-            dateEnd: dateEnd || item.DateEnd || item.dateEnd || '',
           }
         : { name: primary, photo: photoPath };
       await apiRequest(`/${kind}/${id}`, {
@@ -1777,8 +1927,6 @@ async function handleSaveItem(event) {
         ? {
             name: primary,
             photo: photoPath,
-            dateStart: dateStart ? `${dateStart}T00:00:00.000Z` : '',
-            dateEnd: dateEnd ? `${dateEnd}T23:59:59.000Z` : '',
           }
         : { name: primary, photo: photoPath };
       await apiRequest(`/${kind}`, {
@@ -1817,6 +1965,7 @@ function openEditorPage(kind, itemKey, isPhotoEdit) {
   }
 
   state.editorContext = {
+    target: 'collection',
     kind,
     itemKey,
     primaryDraft: item.Name,
@@ -1824,6 +1973,38 @@ function openEditorPage(kind, itemKey, isPhotoEdit) {
     dateStartDraft: String(item.DateStart || '').slice(0, 10),
     dateEndDraft: String(item.DateEnd || '').slice(0, 10),
     mediaMode: isPhotoEdit ? 'file' : null,
+    status: '',
+  };
+  navigate('/editor');
+}
+
+function toDateTimeLocalValue(value) {
+  const date = parseUtcDateTime(value);
+  if (!date) {
+    return '';
+  }
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function openHistoryEditorPage(historyKey) {
+  if (!historyKey) {
+    return;
+  }
+  const historyEntry = buildHistoryEntries().find((entry) => entry.historyKey === historyKey);
+  if (!historyEntry) {
+    return;
+  }
+  state.editorContext = {
+    target: 'history',
+    kind: historyEntry.kind,
+    itemKey: historyEntry.itemKey,
+    historyEntry,
+    primaryDraft: historyEntry.title,
+    photoDraft: historyEntry.entry.Photo || '',
+    dateStartDraft: toDateTimeLocalValue(historyEntry.entry.DateStart),
+    dateEndDraft: toDateTimeLocalValue(historyEntry.entry.DateEnd),
+    mediaMode: 'link',
     status: '',
   };
   navigate('/editor');
