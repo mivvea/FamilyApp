@@ -65,8 +65,8 @@ input {
 }
 
 .user-pill {
-  padding: 12px 18px;
-  min-height: 48px;
+  width: 124px;
+  height: 124px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.08);
   color: #bcd0f2;
@@ -475,15 +475,14 @@ code {
 
 .hello-video {
   width: 100%;
-  max-width: 560px;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #030812;
 }
 
 .user-mini-photo {
-  width: 68px;
-  height: 68px;
+  width: 124px;
+  height: 124px;
   border-radius: 25px;
   object-fit: cover;
   display: block;
