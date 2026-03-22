@@ -596,6 +596,12 @@ input::placeholder {
   margin-top: 10px;
 }
 
+.travel-pick-dates {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .travel-dates-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -655,20 +661,38 @@ input::placeholder {
   margin-bottom: 6px;
 }
 
-.calendar-day-markers {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
+.calendar-day-items {
+  display: grid;
+  gap: 6px;
 }
 
-.calendar-marker {
-  background: var(--marker-color, #94a3b8);
-  color: #fff;
-  border-radius: 999px;
-  min-width: 18px;
-  padding: 1px 6px;
+.calendar-day-empty {
+  font-size: 0.82rem;
+  color: #7c90b8;
+}
+
+.calendar-item-chip {
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--item-color, #94a3b8) 60%, transparent);
+  background: color-mix(in srgb, var(--item-color, #94a3b8) 22%, transparent);
+  color: #eef4ff;
+  border-radius: 8px;
+  padding: 4px 6px;
+  text-align: left;
   font-size: 0.72rem;
-  text-align: center;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-item-chip.static {
+  display: block;
+  opacity: 0.88;
+}
+
+.calendar-item-chip:not(.static):hover {
+  filter: brightness(1.08);
 }
 
 .history-day-list-panel {

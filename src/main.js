@@ -4,6 +4,19 @@ import { DataMapper } from './services/data-mapper.js';
 
 const app = document.querySelector('#app');
 
+function formatLocalDateKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
 function readStorage(key) {
   try {
     return window.localStorage.getItem(key) || '';
@@ -76,7 +89,7 @@ const state = {
   travelDraft: { name: '', photo: '', dateStart: '', dateEnd: '' },
   historyMonthCursor: (() => {
     const now = new Date();
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   })(),
   editorContext: null,
   profileEditorMode: 'link',
@@ -417,6 +430,93 @@ function getItemKey(kind, item) {
 
 function findItemByKey(kind, itemKey) {
   return getAllKnownItems(kind).find((item) => getItemKey(kind, item) === itemKey) || null;
+}
+
+function historyTypeToKind(type) {
+  const normalizedType = String(type || '').trim().toLowerCase();
+  if (normalizedType === 'dish' || normalizedType === 'dishes') {
+    return 'dishes';
+  }
+  if (normalizedType === 'movie' || normalizedType === 'movies') {
+    return 'movies';
+  }
+  if (normalizedType === 'travel' || normalizedType === 'travels') {
+    return 'travel';
+  }
+  return '';
+}
+
+function parseUtcDateKey(value) {
+  const source = String(value || '').trim();
+  if (!source) {
+    return '';
+  }
+
+  const parsed = new Date(source);
+  if (Number.isNaN(parsed.getTime())) {
+    const match = source.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      return formatLocalDateKey(new Date(`${match[1]}T00:00:00.000Z`));
+    }
+    return '';
+  }
+  return formatLocalDateKey(parsed);
+}
+
+function dateKeyToLocalDate(dateKey) {
+  if (!dateKey) {
+    return null;
+  }
+  const parsed = new Date(`${dateKey}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function dateDiffInDays(startDate, endDate) {
+  if (!startDate || !endDate) {
+    return 1;
+  }
+  const millis = endDate.getTime() - startDate.getTime();
+  return Math.max(1, Math.floor(millis / 86400000) + 1);
+}
+
+function resolveHistoryEntryItemKey(entry, kind) {
+  if (!kind) {
+    return '';
+  }
+
+  const itemIdCandidates = [
+    entry?.ItemId,
+    entry?.itemId,
+    entry?.SourceId,
+    entry?.sourceId,
+    entry?.ReferenceId,
+    entry?.referenceId,
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  const allItems = getAllKnownItems(kind);
+  if (itemIdCandidates.length) {
+    const idMatch = allItems.find((item) => itemIdCandidates.includes(String(getItemId(item) || '')));
+    if (idMatch) {
+      return getItemKey(kind, idMatch);
+    }
+  }
+
+  const entryName = String(entry?.Name || '').trim().toLowerCase();
+  const entryPhoto = extractPathValue(entry?.Photo || entry?.photo);
+  const exactMatch = allItems.find((item) => {
+    const sameName = String(item?.Name || '').trim().toLowerCase() === entryName;
+    const samePhoto = entryPhoto ? String(item?.Photo || '').trim() === entryPhoto : true;
+    return sameName && samePhoto;
+  });
+
+  if (exactMatch) {
+    return getItemKey(kind, exactMatch);
+  }
+
+  const nameMatch = allItems.find((item) => String(item?.Name || '').trim().toLowerCase() === entryName);
+  return nameMatch ? getItemKey(kind, nameMatch) : '';
 }
 
 function getAddedByPhotoPath(item) {
@@ -921,10 +1021,16 @@ function renderMediaList({ kind, items, itemField, imageField, emptyText }) {
                   <button class="button secondary" type="button" data-pick-delete-kind="${kind}" data-item-key="${escapeAttribute(itemKey)}">Pick & delete</button>
                 </div>
                 ${kind === 'travel'
-                  ? `<label class="inline-date">
-                      Date
-                      <input type="date" data-travel-date="${escapeAttribute(itemKey)}" />
-                    </label>`
+                  ? `<div class="travel-pick-dates">
+                      <label class="inline-date">
+                        Start
+                        <input type="date" data-travel-date-start="${escapeAttribute(itemKey)}" />
+                      </label>
+                      <label class="inline-date">
+                        End
+                        <input type="date" data-travel-date-end="${escapeAttribute(itemKey)}" />
+                      </label>
+                    </div>`
                   : ''}
               </div>
             </li>
@@ -998,45 +1104,79 @@ function renderHistoryCalendar() {
     return '<div class="empty-state">No history yet.</div>';
   }
 
-  const grouped = new Map();
-  state.history.forEach((entry) => {
-    const dateKey = String(entry.DateStart || '').slice(0, 10) || 'Unknown date';
-    const list = grouped.get(dateKey) || [];
-    list.push(entry);
-    grouped.set(dateKey, list);
-  });
+  const historyEntries = state.history
+    .map((entry) => {
+      const kind = historyTypeToKind(entry.Type);
+      const startKey = parseUtcDateKey(entry.DateStart);
+      const endKey = parseUtcDateKey(entry.DateEnd) || startKey;
+      if (!startKey || !endKey) {
+        return null;
+      }
+
+      const startDate = dateKeyToLocalDate(startKey);
+      const endDate = dateKeyToLocalDate(endKey);
+      if (!startDate || !endDate) {
+        return null;
+      }
+
+      const normalizedStartDate = startDate <= endDate ? startDate : endDate;
+      const normalizedEndDate = startDate <= endDate ? endDate : startDate;
+      const normalizedStartKey = formatLocalDateKey(normalizedStartDate);
+      const normalizedEndKey = formatLocalDateKey(normalizedEndDate);
+
+      return {
+        entry,
+        kind,
+        itemKey: resolveHistoryEntryItemKey(entry, kind),
+        startKey: normalizedStartKey,
+        endKey: normalizedEndKey,
+        startDate: normalizedStartDate,
+        endDate: normalizedEndDate,
+        durationDays: dateDiffInDays(normalizedStartDate, normalizedEndDate),
+        title: String(entry.Name || 'Untitled').trim() || 'Untitled',
+      };
+    })
+    .filter(Boolean);
 
   const cursor = new Date(state.historyMonthCursor);
-  const year = cursor.getUTCFullYear();
-  const month = cursor.getUTCMonth();
-  const monthStart = new Date(Date.UTC(year, month, 1));
-  const monthLabel = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
-  const firstDayOfWeek = monthStart.getUTCDay();
-  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const monthStart = new Date(year, month, 1);
+  const monthLabel = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const firstDayOfWeek = monthStart.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells = [];
   for (let i = 0; i < firstDayOfWeek; i += 1) {
     cells.push(null);
   }
   for (let day = 1; day <= daysInMonth; day += 1) {
-    cells.push(new Date(Date.UTC(year, month, day)));
+    cells.push(new Date(year, month, day));
   }
   while (cells.length % 7 !== 0) {
     cells.push(null);
   }
 
-  const renderMarkers = (entries) => {
-    const colors = {
-      movie: '#8b5cf6',
-      dish: '#f59e0b',
-      travel: '#06b6d4',
-    };
-    const counts = new Map();
-    entries.forEach((entry) => {
-      const key = String(entry.Type || 'item').toLowerCase();
-      counts.set(key, (counts.get(key) || 0) + 1);
-    });
-    return Array.from(counts.entries())
-      .map(([type, count]) => `<span class="calendar-marker marker-${escapeAttribute(type)}" style="--marker-color:${colors[type] || '#94a3b8'};" title="${escapeAttribute(`${type}: ${count}`)}">${count}</span>`)
+  const colors = {
+    dishes: '#f59e0b',
+    movies: '#8b5cf6',
+    travel: '#06b6d4',
+  };
+
+  const renderCalendarItems = (entries) => {
+    if (!entries.length) {
+      return '<div class="calendar-day-empty">—</div>';
+    }
+
+    return entries
+      .map((historyItem) => {
+        const editAttributes = historyItem.kind && historyItem.itemKey
+          ? ` data-edit-kind="${escapeAttribute(historyItem.kind)}" data-item-key="${escapeAttribute(historyItem.itemKey)}"`
+          : '';
+        const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
+        return historyItem.kind && historyItem.itemKey
+          ? `<button class="calendar-item-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${escapeHtml(historyItem.title)}</button>`
+          : `<span class="calendar-item-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${escapeHtml(historyItem.title)}</span>`;
+      })
       .join('');
   };
 
@@ -1047,8 +1187,8 @@ function renderHistoryCalendar() {
       <button class="button secondary" type="button" data-history-nav="1">→</button>
     </div>
     <div class="calendar-legend">
-      <span><i style="background:#8b5cf6"></i> Movie</span>
       <span><i style="background:#f59e0b"></i> Dish</span>
+      <span><i style="background:#8b5cf6"></i> Movie</span>
       <span><i style="background:#06b6d4"></i> Travel</span>
     </div>
     <div class="history-calendar-grid">
@@ -1057,25 +1197,41 @@ function renderHistoryCalendar() {
         if (!date) {
           return '<div class="calendar-day muted-day"></div>';
         }
-        const key = date.toISOString().slice(0, 10);
-        const entries = grouped.get(key) || [];
+        const key = formatLocalDateKey(date);
+        const entries = historyEntries
+          .filter((historyItem) => key >= historyItem.startKey && key <= historyItem.endKey)
+          .sort((left, right) => {
+            if (right.durationDays !== left.durationDays) {
+              return right.durationDays - left.durationDays;
+            }
+            return left.title.localeCompare(right.title);
+          });
         return `
           <div class="calendar-day">
-            <div class="calendar-day-number">${date.getUTCDate()}</div>
-            <div class="calendar-day-markers">${renderMarkers(entries)}</div>
+            <div class="calendar-day-number">${date.getDate()}</div>
+            <div class="calendar-day-items">${renderCalendarItems(entries)}</div>
           </div>
         `;
       }).join('')}
     </div>
     <div class="history-day-list-panel">
-      ${Array.from(grouped.entries())
-        .filter(([day]) => day.startsWith(`${year}-${String(month + 1).padStart(2, '0')}-`))
-        .sort(([a], [b]) => (a > b ? 1 : -1))
-        .map(([day, entries]) => `
+      ${historyEntries
+        .filter((historyItem) => historyItem.startDate.getFullYear() === year && historyItem.startDate.getMonth() === month)
+        .sort((left, right) => {
+          if (left.startKey !== right.startKey) {
+            return left.startKey.localeCompare(right.startKey);
+          }
+          return right.durationDays - left.durationDays;
+        })
+        .map((historyItem) => `
           <section class="history-day">
-            <h4>${escapeHtml(day)}</h4>
+            <h4>${escapeHtml(historyItem.startKey)} → ${escapeHtml(historyItem.endKey)}</h4>
             <ul class="history-day-list">
-              ${entries.map((entry) => `<li><span>${escapeHtml(entry.Type || 'item')}</span> · <strong>${escapeHtml(entry.Name || 'Untitled')}</strong></li>`).join('')}
+              <li>
+                <span>${escapeHtml(historyItem.entry.Type || 'item')}</span> ·
+                <strong>${escapeHtml(historyItem.title)}</strong> ·
+                ${historyItem.durationDays} day${historyItem.durationDays === 1 ? '' : 's'}
+              </li>
             </ul>
           </section>
         `).join('')}
@@ -1272,7 +1428,8 @@ function render() {
     button.addEventListener('click', () => {
       const delta = Number(button.getAttribute('data-history-nav') || '0');
       const cursor = new Date(state.historyMonthCursor);
-      state.historyMonthCursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + delta, 1)).toISOString();
+      const nextMonth = new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1);
+      state.historyMonthCursor = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`;
       render();
     });
   });
@@ -1695,9 +1852,12 @@ async function handleDeleteItem(kind, itemKey, isEditor) {
   render();
 }
 
-function readTravelDate(itemKey) {
-  const dateInput = document.querySelector(`[data-travel-date="${CSS.escape(itemKey)}"]`);
-  return dateInput instanceof HTMLInputElement ? dateInput.value : '';
+function readTravelDates(itemKey) {
+  const startInput = document.querySelector(`[data-travel-date-start="${CSS.escape(itemKey)}"]`);
+  const endInput = document.querySelector(`[data-travel-date-end="${CSS.escape(itemKey)}"]`);
+  const start = startInput instanceof HTMLInputElement ? startInput.value : '';
+  const end = endInput instanceof HTMLInputElement ? endInput.value : '';
+  return { start, end };
 }
 
 async function handlePickItem(kind, itemKey, deleteAfterPick) {
@@ -1707,9 +1867,11 @@ async function handlePickItem(kind, itemKey, deleteAfterPick) {
   }
 
   const nowIso = new Date().toISOString();
-  const travelDate = kind === 'travel' ? readTravelDate(itemKey) : '';
-  const travelStartIso = travelDate ? `${travelDate}T00:00:00.000Z` : nowIso;
-  const travelEndIso = travelDate ? `${travelDate}T23:59:59.000Z` : nowIso;
+  const travelDates = kind === 'travel' ? readTravelDates(itemKey) : { start: '', end: '' };
+  const travelStart = travelDates.start || travelDates.end;
+  const travelEnd = travelDates.end || travelDates.start;
+  const travelStartIso = travelStart ? `${travelStart}T00:00:00.000Z` : nowIso;
+  const travelEndIso = travelEnd ? `${travelEnd}T23:59:59.000Z` : nowIso;
 
   const payload = {
     name: item.Name || '',
