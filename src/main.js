@@ -41,6 +41,8 @@ const state = {
   userPhotoUrl: readStorage(`familyapp.userPhoto.${initialStoredName}`),
   usersByName: new Map(),
   usersById: new Map(),
+  userBackgroundByName: new Map(),
+  userBackgroundById: new Map(),
   dishes: [],
   myDishes: [],
   randomDish: null,
@@ -211,6 +213,8 @@ async function hydrateWelcomeMedia() {
   if (!isSignedIn()) {
     state.usersByName = new Map();
     state.usersById = new Map();
+    state.userBackgroundByName = new Map();
+    state.userBackgroundById = new Map();
     state.userPhotoUrl = '';
     return;
   }
@@ -233,6 +237,8 @@ async function refreshProtectedData() {
   if (!isSignedIn()) {
     state.usersByName = new Map();
     state.usersById = new Map();
+    state.userBackgroundByName = new Map();
+    state.userBackgroundById = new Map();
     state.dishes = [];
     state.myDishes = [];
     state.randomDish = null;
@@ -270,6 +276,16 @@ async function refreshProtectedData() {
       normalizedUsers
         .filter((user) => user.Id)
         .map((user) => [String(user.Id), user.Photo]),
+    );
+    state.userBackgroundByName = new Map(
+      normalizedUsers
+        .filter((user) => user.Name)
+        .map((user) => [user.Name.toLowerCase(), sanitizeHexColor(user.Background)]),
+    );
+    state.userBackgroundById = new Map(
+      normalizedUsers
+        .filter((user) => user.Id)
+        .map((user) => [String(user.Id), sanitizeHexColor(user.Background)]),
     );
     const currentUser = normalizedUsers.find((user) => String(user.Name || '').toLowerCase() === String(state.name || '').toLowerCase());
     if (currentUser) {
@@ -348,6 +364,12 @@ function getAddedByPhotoPath(item) {
   return extractPathValue(
     item?.AddedByPhoto || byId || byName || '',
   );
+}
+
+function getAddedByBackground(item) {
+  const byId = state.userBackgroundById.get(String(item?.AddedById || ''));
+  const byName = state.userBackgroundByName.get(String(item?.AddedBy || '').toLowerCase());
+  return sanitizeHexColor(item?.AddedByBackground || byId || byName || '');
 }
 
 function renderUserIdentity(name) {
@@ -540,6 +562,10 @@ function renderProfilePage() {
             Profile background (hex)
             <input name="background" type="text" placeholder="#2F4F4F" value="${escapeAttribute(state.userBackground)}" />
           </label>
+          <label>
+            Pick background color
+            <input name="backgroundPicker" type="color" value="${escapeAttribute(state.userBackground || '#1f2a44')}" />
+          </label>
           <div class="media-mode-switch">
             <button class="tab-button ${state.profileEditorMode === 'link' ? 'active' : ''}" type="button" data-profile-mode="link">Use link</button>
             <button class="tab-button ${state.profileEditorMode === 'file' ? 'active' : ''}" type="button" data-profile-mode="file">Upload file</button>
@@ -650,8 +676,10 @@ function renderAddedBy(item) {
   const explicitPhotoUrl = resolveMediaUrl(getAddedByPhotoPath(item));
   const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
   const avatarUrl = explicitPhotoUrl || (name === state.name ? userPhotoUrl : '');
+  const addedByBackground = getAddedByBackground(item);
+  const styleAttribute = addedByBackground ? ` style="background:${escapeAttribute(addedByBackground)};"` : '';
   return `
-    <span class="meta-tag meta-user">
+    <span class="meta-tag meta-user"${styleAttribute}>
       ${avatarUrl
         ? `<img class="meta-avatar" src="${escapeAttribute(avatarUrl)}" alt="${escapeAttribute(name)}" />`
         : `<span class="meta-avatar meta-avatar-fallback">${escapeHtml((name || 'U').slice(0, 1).toUpperCase())}</span>`}
@@ -902,6 +930,20 @@ function render() {
     });
   }
 
+  const backgroundInput = document.querySelector('input[name="background"]');
+  const backgroundPickerInput = document.querySelector('input[name="backgroundPicker"]');
+  if (backgroundInput && backgroundPickerInput) {
+    backgroundInput.addEventListener('input', () => {
+      const safeColor = sanitizeHexColor(backgroundInput.value);
+      if (safeColor) {
+        backgroundPickerInput.value = safeColor;
+      }
+    });
+    backgroundPickerInput.addEventListener('input', () => {
+      backgroundInput.value = backgroundPickerInput.value;
+    });
+  }
+
   const editorDeleteButton = document.querySelector('[data-editor-delete]');
   if (editorDeleteButton) {
     editorDeleteButton.addEventListener('click', async () => {
@@ -1031,7 +1073,9 @@ async function handleProfileFormSubmit(event) {
   const name = String(formData.get('name') || '').trim();
   const password = String(formData.get('password') || '').trim();
   const darkMode = Number(formData.get('darkMode') ?? state.userDarkMode ?? 0);
-  const background = sanitizeHexColor(formData.get('background'));
+  const backgroundText = sanitizeHexColor(formData.get('background'));
+  const backgroundPicker = sanitizeHexColor(formData.get('backgroundPicker'));
+  const background = backgroundText || backgroundPicker;
   state.profilePasswordDraft = password;
   const photoFile = formData.get('photoFile');
   const photo = String(formData.get('photo') || '').trim();
