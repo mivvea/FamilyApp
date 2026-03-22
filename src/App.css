@@ -87,6 +87,8 @@ input {
 }
 
 .user-pill {
+  width: 52px;
+  height: 52px;
   border-radius: 14px;
   background: rgba(63, 81, 162, 0.44);
   color: #d7e0ff;
@@ -94,9 +96,9 @@ input {
   cursor: pointer;
   font: inherit;
   display: inline-flex;
+  justify-content: center;
   align-items: center;
-  padding: 8px 10px;
-  min-height: 52px;
+  padding: 0;
 }
 
 .nav-list {
@@ -552,9 +554,9 @@ code {
 }
 
 .user-mini-photo {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
   object-fit: cover;
   display: block;
   background: rgba(255, 255, 255, 0.08);

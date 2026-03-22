@@ -362,7 +362,6 @@ function pageTemplate(content) {
               </nav>
               <div class="topbar-actions">
                 <button class="user-pill" type="button" data-edit-user-photo="true">${renderUserIdentity(state.name || 'User')}</button>
-                <button class="button ghost topbar-logout" data-action="logout">Logout</button>
               </div>
             </div>`
           : '<span class="muted">Sign in to browse your family lists.</span>'}
@@ -544,6 +543,7 @@ function renderProfilePage() {
           ${state.profileStatus ? `<p class="message ${state.profileStatus.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(state.profileStatus)}</p>` : ''}
           <div class="row-actions">
             <button class="button primary" type="submit">Save profile</button>
+            <button class="button danger" type="button" data-action="logout">Logout</button>
             <button class="button ghost" type="button" data-go-route="/">Back home</button>
           </div>
         </form>
