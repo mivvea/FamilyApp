@@ -485,8 +485,9 @@ function renderUserIdentity(name) {
 
 function pageTemplate(content) {
   const logoActive = state.route === '/' ? 'active' : '';
+  const shellStyle = state.userBackground ? ` style="--user-surface-background:${escapeAttribute(state.userBackground)};"` : '';
   return `
-    <div class="app-shell">
+    <div class="app-shell"${shellStyle}>
       <header class="topbar">
         ${isSignedIn()
           ? `
@@ -788,10 +789,8 @@ function renderAddedBy(item) {
   const explicitPhotoUrl = resolveMediaUrl(getAddedByPhotoPath(item));
   const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
   const avatarUrl = explicitPhotoUrl || (name === state.name ? userPhotoUrl : '');
-  const addedByBackground = getAddedByBackground(item);
-  const styleAttribute = addedByBackground ? ` style="background:${escapeAttribute(addedByBackground)};"` : '';
   return `
-    <span class="meta-tag meta-user"${styleAttribute}>
+    <span class="meta-tag meta-user">
       ${avatarUrl
         ? `<img class="meta-avatar" src="${escapeAttribute(avatarUrl)}" alt="${escapeAttribute(name)}" />`
         : `<span class="meta-avatar meta-avatar-fallback">${escapeHtml((name || 'U').slice(0, 1).toUpperCase())}</span>`}
@@ -1081,6 +1080,15 @@ function render() {
       colorInput.value = colorPickerInput.value;
       state.userColor = colorPickerInput.value;
       updateProfilePreviewElements();
+    });
+  }
+
+  const darkModeSelect = document.querySelector('select[name="darkMode"]');
+  if (darkModeSelect) {
+    darkModeSelect.addEventListener('change', async () => {
+      state.userDarkMode = Number(darkModeSelect.value);
+      await applyUserThemePreference();
+      applyTheme();
     });
   }
 
