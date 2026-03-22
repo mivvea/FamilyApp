@@ -65,6 +65,8 @@ const state = {
   profileStatus: '',
   collectionMenuOpen: false,
   theme: initialStoredTheme === 'light' ? 'light' : 'dark',
+  userDarkMode: 0,
+  userBackground: '',
 };
 
 const routes = {
@@ -270,9 +272,14 @@ async function refreshProtectedData() {
         .map((user) => [String(user.Id), user.Photo]),
     );
     const currentUser = normalizedUsers.find((user) => String(user.Name || '').toLowerCase() === String(state.name || '').toLowerCase());
-    if (currentUser?.Photo) {
-      state.userPhotoUrl = currentUser.Photo;
-      writeStorage(`familyapp.userPhoto.${state.name}`, currentUser.Photo);
+    if (currentUser) {
+      if (currentUser.Photo) {
+        state.userPhotoUrl = currentUser.Photo;
+        writeStorage(`familyapp.userPhoto.${state.name}`, currentUser.Photo);
+      }
+      state.userDarkMode = currentUser.DarkMode ?? 0;
+      state.userBackground = sanitizeHexColor(currentUser.Background);
+      await applyUserThemePreference();
     }
     state.dishes = DataMapper.normalizeItems(dishes);
     state.myDishes = DataMapper.normalizeItems(myDishes);
@@ -380,11 +387,12 @@ function renderHome() {
   if (isSignedIn()) {
     const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
     const helloVideoUrl = resolveProtectedEndpointUrl('__hello_video__', `${API_BASE_URL}${endpoints.helloVideo}`);
+    const profileBackgroundStyle = state.userBackground ? `style="background:${escapeAttribute(state.userBackground)};"` : '';
     return pageTemplate(`
       <section class="panel auth-layout auth-layout-single">
         <div class="welcome-media">
           <div class="home-top-grid home-top-grid-single">
-            <div class="profile-card profile-card-large equal-card">
+            <div class="profile-card profile-card-large equal-card user-profile-surface" ${profileBackgroundStyle}>
               ${userPhotoUrl
                 ? `<img class="profile-photo profile-photo-large" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
                 : `<div class="profile-photo profile-photo-large profile-fallback">${escapeHtml((state.name || 'U').slice(0, 1).toUpperCase())}</div>`}
@@ -501,9 +509,10 @@ function renderEditorPage() {
 
 function renderProfilePage() {
   const photoPreview = resolveMediaUrl(state.userPhotoUrl);
+  const profileBackgroundStyle = state.userBackground ? `style="background:${escapeAttribute(state.userBackground)};"` : '';
   return pageTemplate(`
     <section class="panel auth-layout">
-      <div class="stack">
+      <div class="stack profile-preview user-profile-surface" ${profileBackgroundStyle}>
         <h1>Edit profile</h1>
         <button class="thumb-shell thumb-button editor-preview" type="button" data-profile-photo-click="true">
           ${photoPreview ? `<img class="media-thumb" src="${escapeAttribute(photoPreview)}" alt="${escapeAttribute(state.name || 'Profile photo')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
@@ -518,6 +527,18 @@ function renderProfilePage() {
           <label>
             Password
             <input name="password" type="password" value="${escapeAttribute(state.profilePasswordDraft)}" placeholder="Optional: leave blank to keep current password" data-profile-password="true" />
+          </label>
+          <label>
+            Dark mode
+            <select name="darkMode">
+              <option value="0" ${state.userDarkMode === 0 ? 'selected' : ''}>Off</option>
+              <option value="1" ${state.userDarkMode === 1 ? 'selected' : ''}>Always on</option>
+              <option value="2" ${state.userDarkMode === 2 ? 'selected' : ''}>After sunset (fallback after 6pm)</option>
+            </select>
+          </label>
+          <label>
+            Profile background (hex)
+            <input name="background" type="text" placeholder="#2F4F4F" value="${escapeAttribute(state.userBackground)}" />
           </label>
           <div class="media-mode-switch">
             <button class="tab-button ${state.profileEditorMode === 'link' ? 'active' : ''}" type="button" data-profile-mode="link">Use link</button>
@@ -534,7 +555,6 @@ function renderProfilePage() {
               </label>`}
           ${state.profileStatus ? `<p class="message ${state.profileStatus.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(state.profileStatus)}</p>` : ''}
           <div class="row-actions">
-            <button class="button secondary" type="button" data-theme-toggle="true">${state.theme === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}</button>
             <button class="button primary" type="submit">Save profile</button>
             <button class="button danger" type="button" data-action="logout">Logout</button>
             <button class="button ghost" type="button" data-go-route="/">Back home</button>
@@ -780,14 +800,6 @@ function render() {
     });
   });
 
-  document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
-    button.addEventListener('click', () => {
-      state.theme = state.theme === 'light' ? 'dark' : 'light';
-      writeStorage('familyapp.theme', state.theme);
-      render();
-    });
-  });
-
   document.querySelectorAll('[data-media-mode-kind]').forEach((button) => {
     button.addEventListener('click', () => {
       const kind = button.getAttribute('data-media-mode-kind');
@@ -1018,6 +1030,8 @@ async function handleProfileFormSubmit(event) {
   const formData = new FormData(event.currentTarget);
   const name = String(formData.get('name') || '').trim();
   const password = String(formData.get('password') || '').trim();
+  const darkMode = Number(formData.get('darkMode') ?? state.userDarkMode ?? 0);
+  const background = sanitizeHexColor(formData.get('background'));
   state.profilePasswordDraft = password;
   const photoFile = formData.get('photoFile');
   const photo = String(formData.get('photo') || '').trim();
@@ -1036,7 +1050,7 @@ async function handleProfileFormSubmit(event) {
       photoPath = photo;
     }
 
-    const payload = { name, photo: photoPath };
+    const payload = { name, photo: photoPath, darkMode, background };
     if (password) {
       payload.password = password;
     }
@@ -1049,9 +1063,12 @@ async function handleProfileFormSubmit(event) {
     state.profileStatus = 'Profile updated.';
     state.name = name;
     state.userPhotoUrl = photoPath;
+    state.userDarkMode = Number.isFinite(darkMode) ? Math.max(0, Math.min(2, darkMode)) : 0;
+    state.userBackground = background;
     state.profilePasswordDraft = password;
     writeStorage('familyapp.name', name);
     writeStorage(`familyapp.userPhoto.${name}`, photoPath);
+    await applyUserThemePreference();
     await refreshProtectedData();
     render();
   } catch (error) {
@@ -1168,6 +1185,52 @@ function escapeAttribute(text) {
 
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', state.theme);
+}
+
+function sanitizeHexColor(value) {
+  const candidate = String(value || '').trim();
+  return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(candidate) ? candidate : '';
+}
+
+function getFallbackDarkModeByClock(date = new Date()) {
+  return date.getHours() >= 18 || date.getHours() < 6;
+}
+
+async function resolveDarkModeBySunset() {
+  const fallback = getFallbackDarkModeByClock();
+  if (!('geolocation' in navigator)) {
+    return fallback;
+  }
+
+  const position = await new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000, maximumAge: 10 * 60 * 1000 });
+  }).catch(() => null);
+
+  if (!position) {
+    return fallback;
+  }
+
+  const { latitude, longitude } = position.coords;
+  const response = await fetch(`https://api.sunrise-sunset.org/json?lat=${encodeURIComponent(latitude)}&lng=${encodeURIComponent(longitude)}&formatted=0`);
+  const data = await response.json();
+  const sunsetIso = data?.results?.sunset;
+  if (!sunsetIso) {
+    return fallback;
+  }
+  return Date.now() >= Date.parse(sunsetIso);
+}
+
+async function applyUserThemePreference() {
+  if (state.userDarkMode === 1) {
+    state.theme = 'dark';
+  } else if (state.userDarkMode === 2) {
+    const afterSunset = await resolveDarkModeBySunset().catch(() => getFallbackDarkModeByClock());
+    state.theme = afterSunset ? 'dark' : 'light';
+  } else {
+    state.theme = 'light';
+  }
+
+  writeStorage('familyapp.theme', state.theme);
 }
 
 // Ensure data is loaded on page load if signed in

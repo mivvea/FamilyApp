@@ -79,12 +79,16 @@ export class DataMapper {
     const Photo = this.extractPathValue(
       payload.Photo ?? payload.photo ?? payload.UserPhoto ?? payload.userPhoto ?? payload.ProfilePhoto ?? payload.profilePhoto,
     );
+    const DarkModeRaw = payload.DarkMode ?? payload.darkMode ?? payload.ThemeMode ?? payload.themeMode;
+    const darkModeNumber = Number(DarkModeRaw);
+    const DarkMode = Number.isFinite(darkModeNumber) ? Math.max(0, Math.min(2, Math.round(darkModeNumber))) : 0;
+    const Background = this.pickFirstString(payload, ['Background', 'background', 'ProfileBackground', 'profileBackground']);
 
     if (!Name && !Id) {
       return null;
     }
 
-    return { Id, Name, Photo };
+    return { Id, Name, Photo, DarkMode, Background };
   }
 
   static normalizeUsers(payload) {
