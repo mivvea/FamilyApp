@@ -596,7 +596,82 @@ input::placeholder {
   margin-top: 10px;
 }
 
-.history-calendar {
+.travel-dates-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.calendar-legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+}
+
+.calendar-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.history-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #9bb0d0;
+}
+
+.calendar-day {
+  min-height: 70px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.calendar-day.muted-day {
+  border-style: dashed;
+  opacity: 0.35;
+}
+
+.calendar-day-number {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.calendar-day-markers {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.calendar-marker {
+  background: var(--marker-color, #94a3b8);
+  color: #fff;
+  border-radius: 999px;
+  min-width: 18px;
+  padding: 1px 6px;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.history-day-list-panel {
   display: grid;
   gap: 12px;
 }
@@ -680,6 +755,10 @@ code {
 
   .side-menu.open {
     display: grid;
+  }
+
+  .travel-dates-grid {
+    grid-template-columns: 1fr;
   }
 }
 

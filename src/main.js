@@ -73,7 +73,11 @@ const state = {
   editingTravelId: '',
   dishDraft: { name: '', photo: '' },
   movieDraft: { name: '', photo: '' },
-  travelDraft: { name: '', photo: '' },
+  travelDraft: { name: '', photo: '', dateStart: '', dateEnd: '' },
+  historyMonthCursor: (() => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  })(),
   editorContext: null,
   profileEditorMode: 'link',
   profilePhotoPreviewUrl: '',
@@ -638,6 +642,8 @@ function renderEditorPage() {
   const image = resolveMediaUrl(context.photoDraft ?? item.Photo);
   const currentPhoto = context.photoDraft ?? item.Photo ?? '';
   const mediaMode = context.mediaMode || 'link';
+  const dateStartValue = String(context.dateStartDraft ?? item.DateStart ?? '').slice(0, 10);
+  const dateEndValue = String(context.dateEndDraft ?? item.DateEnd ?? '').slice(0, 10);
 
   return pageTemplate(`
     <section class="panel auth-layout editor-layout-surface">
@@ -666,6 +672,18 @@ function renderEditorPage() {
                 Photo path or URL
                 <input id="editor-link-input" name="image" type="text" value="${escapeAttribute(currentPhoto)}" />
               </label>`}
+          ${context.kind === 'travel'
+            ? `<div class="travel-dates-grid">
+                <label>
+                  Start date
+                  <input name="dateStart" type="date" value="${escapeAttribute(dateStartValue)}" />
+                </label>
+                <label>
+                  End date
+                  <input name="dateEnd" type="date" value="${escapeAttribute(dateEndValue)}" />
+                </label>
+              </div>`
+            : ''}
           ${context.status ? `<p class="message ${context.status.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(context.status)}</p>` : ''}
           <div class="row-actions">
             <button class="button primary" type="submit">Save changes</button>
@@ -798,6 +816,18 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
                   ${imageLabel}
                   <input name="image" type="url" placeholder="${imagePlaceholder}" value="${escapeAttribute(getEditingValue(kind, imageField))}" />
                 </label>`}
+            ${kind === 'travel'
+              ? `<div class="travel-dates-grid">
+                  <label>
+                    Start date
+                    <input name="dateStart" type="date" value="${escapeAttribute(getEditingValue(kind, 'DateStart'))}" />
+                  </label>
+                  <label>
+                    End date
+                    <input name="dateEnd" type="date" value="${escapeAttribute(getEditingValue(kind, 'DateEnd'))}" />
+                  </label>
+                </div>`
+              : ''}
             <button class="button primary" type="submit">${editingId ? 'Save changes' : 'Save'}</button>
           </form>
         ` : ''}
@@ -817,11 +847,29 @@ function getEditingValue(kind, field) {
   if (normalizedField === 'photo' && draft.photo) {
     return draft.photo;
   }
+  if (normalizedField === 'datestart' && draft.dateStart) {
+    return draft.dateStart;
+  }
+  if (normalizedField === 'dateend' && draft.dateEnd) {
+    return draft.dateEnd;
+  }
 
   const collection = getAllKnownItems(kind);
   const editingId = kind === 'dishes' ? state.editingDishId : kind === 'movies' ? state.editingMovieId : state.editingTravelId;
   const item = collection.find((entry) => getItemId(entry) === editingId);
-  return normalizedField === 'name' ? (item?.Name || '') : (item?.Photo || '');
+  if (normalizedField === 'name') {
+    return item?.Name || '';
+  }
+  if (normalizedField === 'photo') {
+    return item?.Photo || '';
+  }
+  if (normalizedField === 'datestart') {
+    return String(item?.DateStart || '').slice(0, 10);
+  }
+  if (normalizedField === 'dateend') {
+    return String(item?.DateEnd || '').slice(0, 10);
+  }
+  return '';
 }
 
 function updateCollectionDraft(kind, field, value) {
@@ -958,17 +1006,79 @@ function renderHistoryCalendar() {
     grouped.set(dateKey, list);
   });
 
-  const days = Array.from(grouped.entries()).sort(([a], [b]) => (a < b ? 1 : -1));
+  const cursor = new Date(state.historyMonthCursor);
+  const year = cursor.getUTCFullYear();
+  const month = cursor.getUTCMonth();
+  const monthStart = new Date(Date.UTC(year, month, 1));
+  const monthLabel = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const firstDayOfWeek = monthStart.getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const cells = [];
+  for (let i = 0; i < firstDayOfWeek; i += 1) {
+    cells.push(null);
+  }
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    cells.push(new Date(Date.UTC(year, month, day)));
+  }
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  const renderMarkers = (entries) => {
+    const colors = {
+      movie: '#8b5cf6',
+      dish: '#f59e0b',
+      travel: '#06b6d4',
+    };
+    const counts = new Map();
+    entries.forEach((entry) => {
+      const key = String(entry.Type || 'item').toLowerCase();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([type, count]) => `<span class="calendar-marker marker-${escapeAttribute(type)}" style="--marker-color:${colors[type] || '#94a3b8'};" title="${escapeAttribute(`${type}: ${count}`)}">${count}</span>`)
+      .join('');
+  };
+
   return `
-    <div class="history-calendar">
-      ${days.map(([day, entries]) => `
-        <section class="history-day">
-          <h4>${escapeHtml(day)}</h4>
-          <ul class="history-day-list">
-            ${entries.map((entry) => `<li><span>${escapeHtml(entry.Type || 'item')}</span> · <strong>${escapeHtml(entry.Name || 'Untitled')}</strong></li>`).join('')}
-          </ul>
-        </section>
-      `).join('')}
+    <div class="calendar-toolbar">
+      <button class="button secondary" type="button" data-history-nav="-1">←</button>
+      <strong>${escapeHtml(monthLabel)}</strong>
+      <button class="button secondary" type="button" data-history-nav="1">→</button>
+    </div>
+    <div class="calendar-legend">
+      <span><i style="background:#8b5cf6"></i> Movie</span>
+      <span><i style="background:#f59e0b"></i> Dish</span>
+      <span><i style="background:#06b6d4"></i> Travel</span>
+    </div>
+    <div class="history-calendar-grid">
+      ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => `<div class="calendar-weekday">${weekday}</div>`).join('')}
+      ${cells.map((date) => {
+        if (!date) {
+          return '<div class="calendar-day muted-day"></div>';
+        }
+        const key = date.toISOString().slice(0, 10);
+        const entries = grouped.get(key) || [];
+        return `
+          <div class="calendar-day">
+            <div class="calendar-day-number">${date.getUTCDate()}</div>
+            <div class="calendar-day-markers">${renderMarkers(entries)}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+    <div class="history-day-list-panel">
+      ${Array.from(grouped.entries())
+        .filter(([day]) => day.startsWith(`${year}-${String(month + 1).padStart(2, '0')}-`))
+        .sort(([a], [b]) => (a > b ? 1 : -1))
+        .map(([day, entries]) => `
+          <section class="history-day">
+            <h4>${escapeHtml(day)}</h4>
+            <ul class="history-day-list">
+              ${entries.map((entry) => `<li><span>${escapeHtml(entry.Type || 'item')}</span> · <strong>${escapeHtml(entry.Name || 'Untitled')}</strong></li>`).join('')}
+            </ul>
+          </section>
+        `).join('')}
     </div>
   `;
 }
@@ -1093,7 +1203,7 @@ function render() {
         state.showTravelForm = !state.showTravelForm;
         state.editingTravelId = state.showTravelForm ? state.editingTravelId : '';
         if (!state.showTravelForm) {
-          state.travelDraft = { name: '', photo: '' };
+          state.travelDraft = { name: '', photo: '', dateStart: '', dateEnd: '' };
         }
       }
       render();
@@ -1158,6 +1268,15 @@ function render() {
     });
   });
 
+  document.querySelectorAll('[data-history-nav]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const delta = Number(button.getAttribute('data-history-nav') || '0');
+      const cursor = new Date(state.historyMonthCursor);
+      state.historyMonthCursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + delta, 1)).toISOString();
+      render();
+    });
+  });
+
   document.querySelectorAll('[data-add-form]').forEach((form) => {
     form.addEventListener('submit', handleSaveItem);
     form.addEventListener('input', (event) => {
@@ -1174,6 +1293,12 @@ function render() {
       }
       if (target.name === 'image') {
         updateCollectionDraft(kind, 'photo', target.value);
+      }
+      if (target.name === 'dateStart') {
+        updateCollectionDraft(kind, 'dateStart', target.value);
+      }
+      if (target.name === 'dateEnd') {
+        updateCollectionDraft(kind, 'dateEnd', target.value);
       }
     });
   });
@@ -1340,6 +1465,8 @@ async function handleEditorFormSubmit(event) {
   const primary = String(formData.get('primary') || '').trim();
   const imageFile = formData.get('imageFile');
   const image = String(formData.get('image') || '').trim();
+  const dateStart = String(formData.get('dateStart') || '').trim();
+  const dateEnd = String(formData.get('dateEnd') || '').trim();
   const { kind, itemKey } = state.editorContext;
   const item = findItemByKey(kind, itemKey);
   if (!item) {
@@ -1348,7 +1475,11 @@ async function handleEditorFormSubmit(event) {
 
   const id = getItemId(item);
   const endpoint = `/${kind}/${id}`;
-  const body = { name: primary, photo: image };
+  const body = {
+    ...(kind === 'travel' ? item : {}),
+    name: primary,
+    photo: image,
+  };
 
   try {
     if (imageFile instanceof File && imageFile.size > 0) {
@@ -1363,7 +1494,15 @@ async function handleEditorFormSubmit(event) {
 
     await apiRequest(endpoint, {
       method: 'PUT',
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...body,
+        ...(kind === 'travel'
+          ? {
+              dateStart: dateStart || item.DateStart || item.dateStart || '',
+              dateEnd: dateEnd || item.DateEnd || item.dateEnd || '',
+            }
+          : {}),
+      }),
     });
 
     state.editorContext.status = 'Item updated.';
@@ -1442,6 +1581,8 @@ async function handleSaveItem(event) {
   const primary = String(formData.get('primary') || '').trim();
   const imageFile = formData.get('imageFile');
   const image = String(formData.get('image') || '').trim();
+  const dateStart = String(formData.get('dateStart') || '').trim();
+  const dateEnd = String(formData.get('dateEnd') || '').trim();
 
   const editingId = kind === 'dishes' ? state.editingDishId : kind === 'movies' ? state.editingMovieId : state.editingTravelId;
   const collection = getAllKnownItems(kind);
@@ -1461,14 +1602,31 @@ async function handleSaveItem(event) {
 
     if (editingId && item) {
       const id = getItemId(item);
+      const travelPayload = kind === 'travel'
+        ? {
+            ...item,
+            name: primary,
+            photo: photoPath,
+            dateStart: dateStart || item.DateStart || item.dateStart || '',
+            dateEnd: dateEnd || item.DateEnd || item.dateEnd || '',
+          }
+        : { name: primary, photo: photoPath };
       await apiRequest(`/${kind}/${id}`, {
         method: 'PUT',
-        body: JSON.stringify({ name: primary, photo: photoPath }),
+        body: JSON.stringify(travelPayload),
       });
     } else {
+      const travelPayload = kind === 'travel'
+        ? {
+            name: primary,
+            photo: photoPath,
+            dateStart: dateStart ? `${dateStart}T00:00:00.000Z` : '',
+            dateEnd: dateEnd ? `${dateEnd}T23:59:59.000Z` : '',
+          }
+        : { name: primary, photo: photoPath };
       await apiRequest(`/${kind}`, {
         method: 'POST',
-        body: JSON.stringify({ name: primary, photo: photoPath }),
+        body: JSON.stringify(travelPayload),
       });
     }
 
@@ -1483,7 +1641,7 @@ async function handleSaveItem(event) {
     } else {
       state.showTravelForm = false;
       state.editingTravelId = '';
-      state.travelDraft = { name: '', photo: '' };
+      state.travelDraft = { name: '', photo: '', dateStart: '', dateEnd: '' };
     }
 
     await refreshProtectedData();
@@ -1506,6 +1664,8 @@ function openEditorPage(kind, itemKey, isPhotoEdit) {
     itemKey,
     primaryDraft: item.Name,
     photoDraft: isPhotoEdit ? null : item.Photo,
+    dateStartDraft: String(item.DateStart || '').slice(0, 10),
+    dateEndDraft: String(item.DateEnd || '').slice(0, 10),
     mediaMode: isPhotoEdit ? 'file' : null,
     status: '',
   };
