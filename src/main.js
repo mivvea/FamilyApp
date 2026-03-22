@@ -384,7 +384,7 @@ function renderHome() {
     return pageTemplate(`
       <section class="panel auth-layout auth-layout-single">
         <div class="welcome-media">
-          <div class="home-top-grid">
+          <div class="home-top-grid home-top-grid-single">
             <div class="profile-card profile-card-large equal-card">
               ${userPhotoUrl
                 ? `<img class="profile-photo profile-photo-large" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
@@ -393,13 +393,6 @@ function renderHome() {
                 <strong>${escapeHtml(state.name || 'User')}</strong>
               </div>
             </div>
-            <section class="auth-card equal-card">
-              <h2>Quick actions</h2>
-              <div class="stack">
-                <button class="button primary" type="button" data-go-route="/dishes">Open dishes</button>
-                <button class="button ghost" type="button" data-go-route="/movies">Open movies</button>
-              </div>
-            </section>
           </div>
           ${helloVideoUrl
             ? `<video class="hello-video" src="${escapeAttribute(helloVideoUrl)}" controls autoplay muted loop playsinline>

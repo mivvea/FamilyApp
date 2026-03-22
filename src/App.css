@@ -99,30 +99,52 @@ input {
 }
 
 .nav-list {
+  position: relative;
   display: flex;
+  align-items: center;
   gap: 12px;
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 6px;
   flex-wrap: wrap;
+  border-radius: 18px;
+  background: rgba(67, 84, 151, 0.2);
+}
+
+.nav-list::before {
+  content: '';
+  position: absolute;
+  inset: 6px auto 6px 6px;
+  width: calc(50% - 9px);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(72, 131, 255, 0.45), rgba(123, 97, 255, 0.42));
+  transition: transform 240ms ease;
+  pointer-events: none;
+}
+
+.nav-list:has(a.active[href='#/movies'])::before {
+  transform: translateX(calc(100% + 6px));
 }
 
 .nav-list a {
+  position: relative;
+  z-index: 1;
   padding: 12px 28px;
   min-height: 50px;
   border-radius: 14px;
   color: #98a7d5;
-  background: rgba(67, 84, 151, 0.34);
+  background: transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
+  transition: color 220ms ease;
 }
 
 .nav-list a.active,
 .nav-list a:hover {
   color: #fff;
-  background: rgba(100, 122, 225, 0.55);
+  background: transparent;
 }
 
 .page-content {
@@ -514,12 +536,15 @@ code {
 }
 
 @media (max-width: 720px) {
-  .topbar,
+  .topbar {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
   .list-toolbar,
-  .topbar-actions,
-  .row-actions {
-    flex-direction: column;
-    align-items: flex-start;
+  .topbar-actions {
+    flex-direction: row;
+    align-items: center;
   }
 
   .app-shell {
@@ -531,7 +556,8 @@ code {
   }
 
   .media-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: 136px 1fr;
+    align-items: start;
   }
 
   .media-list {
@@ -539,15 +565,20 @@ code {
   }
 
   .thumb-shell {
-    width: 100%;
-    height: 240px;
+    width: 136px;
+    height: 136px;
   }
 
   .topbar .button,
   .topbar .user-pill,
   .topbar .nav-list a {
-    width: 100%;
+    width: auto;
     justify-content: center;
+  }
+
+  .row-actions {
+    flex-direction: row;
+    align-items: center;
   }
 }
 
@@ -557,6 +588,7 @@ code {
   gap: 18px;
   margin-top: 8px;
   max-width: 680px;
+  width: 100%;
 }
 
 .home-top-grid {
@@ -633,6 +665,10 @@ code {
   align-items: center;
   width: 100%;
   justify-content: flex-start;
+}
+
+.home-top-grid-single {
+  grid-template-columns: 1fr;
 }
 
 .profile-photo-large {
