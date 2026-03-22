@@ -148,6 +148,10 @@ input {
   align-items: start;
 }
 
+.auth-layout-single {
+  grid-template-columns: 1fr;
+}
+
 .auth-card {
   padding: 24px;
   border-radius: 22px;
@@ -277,6 +281,10 @@ input::placeholder {
   gap: 28px;
 }
 
+.side-menu-toggle {
+  display: none;
+}
+
 .side-menu {
   display: grid;
   gap: 12px;
@@ -308,6 +316,21 @@ input::placeholder {
 
 .content-panel {
   min-height: 420px;
+}
+
+.route-transition {
+  animation: page-fade-in 280ms ease;
+}
+
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .list-toolbar {
@@ -466,6 +489,28 @@ code {
   .brand-panel {
     min-width: 100%;
   }
+
+  .home-top-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-layout {
+    gap: 14px;
+  }
+
+  .side-menu-toggle {
+    display: inline-flex;
+    width: fit-content;
+  }
+
+  .side-menu {
+    display: none;
+    min-height: auto;
+  }
+
+  .side-menu.open {
+    display: grid;
+  }
 }
 
 @media (max-width: 720px) {
@@ -510,8 +555,19 @@ code {
 .welcome-media {
   display: grid;
   gap: 18px;
-  margin-top: 24px;
+  margin-top: 8px;
   max-width: 680px;
+}
+
+.home-top-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.equal-card {
+  height: 100%;
 }
 
 .profile-card {
