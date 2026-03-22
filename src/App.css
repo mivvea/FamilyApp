@@ -25,7 +25,8 @@ a {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -70,10 +71,11 @@ input {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  border: 1px solid rgba(118, 145, 255, 0.14);
+  border: 1px solid rgba(118, 145, 255, 0.2);
   border-radius: 20px;
-  background: linear-gradient(110deg, rgba(8, 18, 55, 0.95), rgba(8, 18, 53, 0.75));
+  background: linear-gradient(110deg, rgba(12, 25, 72, 0.95), rgba(14, 27, 74, 0.82));
   backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .topbar-nav {
@@ -247,6 +249,15 @@ label {
 }
 
 input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+}
+
+select {
   width: 100%;
   padding: 14px 16px;
   border-radius: 14px;
@@ -652,6 +663,7 @@ code {
     min-width: 0;
     padding: 6px;
     gap: 8px;
+    justify-content: center;
   }
 
   .topbar-nav {
@@ -716,6 +728,8 @@ code {
   margin-top: 8px;
   max-width: 680px;
   width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .home-top-grid {
@@ -737,6 +751,16 @@ code {
   border-radius: 25px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.profile-preview {
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.user-profile-surface {
+  transition: background 220ms ease;
 }
 
 .profile-photo {
@@ -882,6 +906,12 @@ code {
 }
 
 :root[data-theme='light'] input {
+  background: rgba(103, 81, 48, 0.08);
+  border-color: rgba(141, 112, 70, 0.22);
+  color: #4f3f2a;
+}
+
+:root[data-theme='light'] select {
   background: rgba(103, 81, 48, 0.08);
   border-color: rgba(141, 112, 70, 0.22);
   color: #4f3f2a;
