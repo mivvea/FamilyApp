@@ -378,8 +378,6 @@ function renderHome() {
     return pageTemplate(`
       <section class="panel auth-layout">
         <div>
-          <span class="badge">Welcome back</span>
-          <h1>Hi, ${escapeHtml(state.name || 'friend')}!</h1>
           <div class="welcome-media">
             <div class="profile-card profile-card-large">
               ${userPhotoUrl
