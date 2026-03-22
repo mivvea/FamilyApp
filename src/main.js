@@ -62,6 +62,7 @@ const state = {
   profileEditorMode: 'link',
   profilePasswordDraft: '',
   profileStatus: '',
+  collectionMenuOpen: false,
 };
 
 const routes = {
@@ -266,6 +267,11 @@ async function refreshProtectedData() {
         .filter((user) => user.Id)
         .map((user) => [String(user.Id), user.Photo]),
     );
+    const currentUser = normalizedUsers.find((user) => String(user.Name || '').toLowerCase() === String(state.name || '').toLowerCase());
+    if (currentUser?.Photo) {
+      state.userPhotoUrl = currentUser.Photo;
+      writeStorage(`familyapp.userPhoto.${state.name}`, currentUser.Photo);
+    }
     state.dishes = DataMapper.normalizeItems(dishes);
     state.myDishes = DataMapper.normalizeItems(myDishes);
     state.randomDish = DataMapper.normalizeItem(normalizeSingleItem(randomDish));
@@ -376,10 +382,10 @@ function renderHome() {
     const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
     const helloVideoUrl = resolveProtectedEndpointUrl('__hello_video__', `${API_BASE_URL}${endpoints.helloVideo}`);
     return pageTemplate(`
-      <section class="panel auth-layout">
-        <div>
-          <div class="welcome-media">
-            <div class="profile-card profile-card-large">
+      <section class="panel auth-layout auth-layout-single">
+        <div class="welcome-media">
+          <div class="home-top-grid">
+            <div class="profile-card profile-card-large equal-card">
               ${userPhotoUrl
                 ? `<img class="profile-photo profile-photo-large" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
                 : `<div class="profile-photo profile-photo-large profile-fallback">${escapeHtml((state.name || 'U').slice(0, 1).toUpperCase())}</div>`}
@@ -387,21 +393,20 @@ function renderHome() {
                 <strong>${escapeHtml(state.name || 'User')}</strong>
               </div>
             </div>
-            ${helloVideoUrl
-              ? `<video class="hello-video" src="${escapeAttribute(helloVideoUrl)}" controls autoplay muted loop playsinline>
-                  Your browser does not support the hello video.
-                </video>`
-              : '<div class="empty-state">Loading hello video...</div>'}
+            <section class="auth-card equal-card">
+              <h2>Quick actions</h2>
+              <div class="stack">
+                <button class="button primary" type="button" data-go-route="/dishes">Open dishes</button>
+                <button class="button ghost" type="button" data-go-route="/movies">Open movies</button>
+              </div>
+            </section>
           </div>
+          ${helloVideoUrl
+            ? `<video class="hello-video" src="${escapeAttribute(helloVideoUrl)}" controls autoplay muted loop playsinline>
+                Your browser does not support the hello video.
+              </video>`
+            : '<div class="empty-state">Loading hello video...</div>'}
         </div>
-
-        <section class="auth-card">
-          <h2>Quick actions</h2>
-          <div class="stack">
-            <button class="button primary" type="button" data-go-route="/dishes">Open dishes</button>
-            <button class="button ghost" type="button" data-go-route="/movies">Open movies</button>
-          </div>
-        </section>
       </section>
     `);
   }
@@ -555,14 +560,18 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
   const items = currentSectionItems(kind);
   return pageTemplate(`
     <section class="panel collection-layout">
-      <aside class="side-menu">
+      <button class="button ghost side-menu-toggle" type="button" data-toggle-side-menu="true" aria-expanded="${state.collectionMenuOpen ? 'true' : 'false'}">
+        ${state.collectionMenuOpen ? 'Hide filters' : 'Show filters'}
+      </button>
+
+      <aside class="side-menu ${state.collectionMenuOpen ? 'open' : ''}">
         <h2>${badge}</h2>
         <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All</button>
         <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only mine</button>
         <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Proposition</button>
       </aside>
 
-      <div class="content-panel">
+      <div class="content-panel route-transition">
         <div class="list-toolbar">
           <div>
             <h3>${view === 'all' ? `All ${title.toLowerCase()}` : view === 'mine' ? `My ${title.toLowerCase()}` : `Random ${title.toLowerCase().slice(0, -1)}`}</h3>
@@ -762,6 +771,14 @@ function render() {
           state.randomMovie = DataMapper.normalizeItem(normalizeSingleItem(await apiRequest(endpoints.randomMovie).catch(() => state.randomMovie)));
         }
       }
+      state.collectionMenuOpen = false;
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-toggle-side-menu]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.collectionMenuOpen = !state.collectionMenuOpen;
       render();
     });
   });
