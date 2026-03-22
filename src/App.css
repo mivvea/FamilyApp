@@ -329,11 +329,10 @@ input::placeholder {
 }
 
 .add-item-button {
-  min-height: 52px;
-  min-width: 260px;
   font-size: 1.05rem;
   font-weight: 700;
   justify-content: center;
+  border-radius: 45px;
 }
 
 .add-form {
