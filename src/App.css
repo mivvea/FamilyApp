@@ -127,15 +127,15 @@ select {
 }
 
 .nav-list:has(a.active[href='#/dishes'])::before {
-  transform: translateX(calc(100% + 6px));
+  transform: translateX(100%);
 }
 
 .nav-list:has(a.active[href='#/movies'])::before {
-  transform: translateX(calc((100% + 6px) * 2));
+  transform: translateX(200%);
 }
 
 .nav-list:has(a.active[href='#/profile'])::before {
-  transform: translateX(calc((100% + 6px) * 3));
+  transform: translateX(300%);
 }
 
 .nav-list a {
@@ -155,8 +155,16 @@ select {
 }
 
 .nav-avatar-link {
-  padding: 6px;
+  padding: 2px;
   font-size: 1rem;
+}
+
+.nav-avatar-link .user-mini-photo {
+  width: 80%;
+  height: 80%;
+  max-width: 46px;
+  max-height: 46px;
+  margin: auto;
 }
 
 .nav-list a.active,
@@ -309,7 +317,8 @@ input::placeholder {
 
 .button.ghost,
 .button.secondary {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(7, 16, 31, 0.55);
+  border: 1px solid rgba(116, 143, 246, 0.25);
   color: white;
 }
 
@@ -514,7 +523,8 @@ input::placeholder {
   width: fit-content;
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(115, 128, 190, 0.24);
+  background: rgba(7, 16, 31, 0.66);
+  border: 1px solid rgba(116, 143, 246, 0.2);
   color: #c8d5f1;
   font-size: 0.9rem;
 }
@@ -685,15 +695,15 @@ code {
   }
 
   .nav-list:has(a.active[href='#/dishes'])::before {
-    transform: translateX(calc(100% + 4px));
+    transform: translateX(100%);
   }
 
   .nav-list:has(a.active[href='#/movies'])::before {
-    transform: translateX(calc((100% + 4px) * 2));
+    transform: translateX(200%);
   }
 
   .nav-list:has(a.active[href='#/profile'])::before {
-    transform: translateX(calc((100% + 4px) * 3));
+    transform: translateX(300%);
   }
 
   .nav-list a {
@@ -703,10 +713,12 @@ code {
     flex: 1 1 0;
   }
 
-  .user-mini-photo {
-    width: 52px;
-    height: 52px;
-    border-radius: 12px;
+  .nav-avatar-link .user-mini-photo {
+    width: 80%;
+    height: 80%;
+    max-width: 32px;
+    max-height: 32px;
+    border-radius: 10px;
   }
 
   .desktop-add-button {
@@ -892,11 +904,13 @@ code {
 }
 
 :root[data-theme='light'] .meta-tag {
-  background: rgba(113, 85, 45, 0.18);
+  background: rgba(255, 248, 235, 0.92);
+  border-color: rgba(141, 112, 70, 0.2);
 }
 
 :root[data-theme='light'] .row-actions .button {
-  background: rgba(98, 72, 40, 0.18);
+  background: rgba(255, 248, 235, 0.92);
+  border: 1px solid rgba(141, 112, 70, 0.2);
   color: #4f3f2a;
 }
 
