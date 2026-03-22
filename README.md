@@ -26,6 +26,13 @@ Supported backend functions in the UI:
 - `GET /Movies/random`
 - `POST /Movies`
 - `DELETE /Movies/{id}`
+- `GET /Travel`
+- `GET /Travel/my`
+- `GET /Travel/random`
+- `POST /Travel`
+- `DELETE /Travel/{id}`
+- `GET /History`
+- `POST /History`
 - `GET /User/list`
 
 ## Code structure
