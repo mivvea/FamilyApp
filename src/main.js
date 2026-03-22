@@ -355,15 +355,15 @@ function pageTemplate(content) {
     <div class="app-shell">
       <header class="topbar">
         <a class="brand-panel" href="#/">
-          <span class="brand">FamilyApp</span>
+          <span class="brand" aria-label="FamilyApp home" title="FamilyApp">🏡</span>
         </a>
         ${isSignedIn()
           ? `
             <div class="topbar-main">
               <nav class="topbar-nav">
                 <ul class="nav-list">
-                  <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes">Dishes</a></li>
-                  <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies">Movies</a></li>
+                  <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes">Dish</a></li>
+                  <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies">Movie</a></li>
                 </ul>
               </nav>
               <div class="topbar-actions">
@@ -553,9 +553,12 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
   const items = currentSectionItems(kind);
   return pageTemplate(`
     <section class="panel collection-layout">
-      <button class="button ghost side-menu-toggle" type="button" data-toggle-side-menu="true" aria-expanded="${state.collectionMenuOpen ? 'true' : 'false'}">
-        ${state.collectionMenuOpen ? 'Hide filters' : 'Show filters'}
-      </button>
+      <div class="mobile-filter-bar">
+        <button class="mobile-filter-link ${view === 'all' ? 'active' : ''}" type="button" data-view-kind="${kind}" data-view="all">ALL</button>
+        <button class="mobile-filter-link ${view === 'mine' ? 'active' : ''}" type="button" data-view-kind="${kind}" data-view="mine">MINE</button>
+        <button class="mobile-filter-link ${view === 'random' ? 'active' : ''}" type="button" data-view-kind="${kind}" data-view="random">PROP</button>
+        <button class="button primary add-item-button mobile-add-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
+      </div>
 
       <aside class="side-menu ${state.collectionMenuOpen ? 'open' : ''}">
         <h2>${badge}</h2>
@@ -569,7 +572,7 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
           <div>
             <h3>${view === 'all' ? `All ${title.toLowerCase()}` : view === 'mine' ? `My ${title.toLowerCase()}` : `Random ${title.toLowerCase().slice(0, -1)}`}</h3>
           </div>
-          <button class="button primary add-item-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
+          <button class="button primary add-item-button desktop-add-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
         </div>
 
         ${showForm ? `
