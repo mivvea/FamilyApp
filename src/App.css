@@ -348,7 +348,7 @@ input::placeholder {
 .media-list {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(333px, 1fr));
   gap: 16px;
   padding: 0;
   margin: 0;
