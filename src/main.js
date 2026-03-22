@@ -407,10 +407,10 @@ function getItemCardStyle(item) {
 
   const styles = [];
   if (background) {
-    styles.push(`background:${background}`);
+    styles.push(`--media-row-added-background:${background}`);
   }
   if (color) {
-    styles.push(`color:${color}`);
+    styles.push(`--media-row-added-color:${color}`);
   }
   return ` style="${escapeAttribute(styles.join(';'))};"`;
 }
