@@ -485,7 +485,14 @@ function renderUserIdentity(name) {
 
 function pageTemplate(content) {
   const logoActive = state.route === '/' ? 'active' : '';
-  const shellStyle = state.userBackground ? ` style="--user-surface-background:${escapeAttribute(state.userBackground)};"` : '';
+  const shellStyles = [];
+  if (state.userBackground) {
+    shellStyles.push(`--user-surface-background:${state.userBackground}`);
+  }
+  if (state.userColor) {
+    shellStyles.push(`--user-surface-color:${state.userColor}`);
+  }
+  const shellStyle = shellStyles.length ? ` style="${escapeAttribute(shellStyles.join(';'))};"` : '';
   return `
     <div class="app-shell"${shellStyle}>
       <header class="topbar">
@@ -595,7 +602,7 @@ function renderEditorPage() {
   const mediaMode = context.mediaMode || 'link';
 
   return pageTemplate(`
-    <section class="panel auth-layout">
+    <section class="panel auth-layout editor-layout-surface">
       <div class="stack">
         <h1>Edit ${kindLabel.toLowerCase()}</h1>
         <button class="thumb-shell thumb-button editor-preview" type="button" data-editor-photo-click="true">

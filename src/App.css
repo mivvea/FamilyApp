@@ -202,6 +202,13 @@ select {
   grid-template-columns: 1fr;
 }
 
+.editor-layout-surface {
+  background:
+    linear-gradient(130deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    linear-gradient(120deg, var(--user-surface-background, rgba(11, 20, 58, 0.68)), rgba(8, 16, 46, 0.76));
+  color: var(--user-surface-color, #ecf2ff);
+}
+
 .auth-card {
   padding: 24px;
   border-radius: 22px;
@@ -357,14 +364,16 @@ input::placeholder {
   min-height: 640px;
   border-radius: 18px;
   background:
+    linear-gradient(130deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
     radial-gradient(circle at 20% 80%, rgba(144, 161, 255, 0.22), transparent 40%),
-    rgba(11, 20, 58, 0.68);
+    linear-gradient(120deg, var(--user-surface-background, rgba(11, 20, 58, 0.68)), rgba(11, 20, 58, 0.68));
   border: 1px solid rgba(104, 130, 246, 0.2);
+  color: var(--user-surface-color, #ecf2ff);
 }
 
 .side-menu h2 {
   margin: 4px 8px 10px;
-  color: #9eacd7;
+  color: inherit;
   font-size: 2rem;
 }
 
@@ -446,11 +455,16 @@ input::placeholder {
   line-height: 1;
 }
 
-.add-item-button {
+.add-item-button.button,
+.add-item-button.button.primary {
   font-size: 1.05rem;
   font-weight: 700;
   justify-content: center;
   border-radius: 45px;
+  color: var(--user-surface-color, #ffffff);
+  background:
+    linear-gradient(130deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05)),
+    linear-gradient(120deg, var(--user-surface-background, #4883ff), #7b61ff);
 }
 
 .add-form {
@@ -921,6 +935,23 @@ code {
     linear-gradient(120deg, var(--media-row-added-background, rgba(255, 248, 235, 0.9)), rgba(241, 228, 207, 0.86));
   border-color: rgba(178, 147, 105, 0.26);
   color: var(--media-row-added-color, #3f3121);
+}
+
+:root[data-theme='light'] .side-menu,
+:root[data-theme='light'] .editor-layout-surface {
+  background:
+    linear-gradient(130deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.18)),
+    linear-gradient(120deg, var(--user-surface-background, rgba(255, 248, 235, 0.9)), rgba(241, 228, 207, 0.86));
+  color: var(--user-surface-color, #3f3121);
+}
+
+:root[data-theme='light'] .add-item-button.button,
+:root[data-theme='light'] .add-item-button.button.primary {
+  background:
+    linear-gradient(130deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.18)),
+    linear-gradient(120deg, var(--user-surface-background, rgba(255, 248, 235, 0.9)), rgba(241, 228, 207, 0.86));
+  border-color: rgba(178, 147, 105, 0.26);
+  color: var(--user-surface-color, #3f3121);
 }
 
 :root[data-theme='light'] .profile-card,
