@@ -29,6 +29,7 @@ function removeStorage(key) {
 }
 
 const initialStoredName = readStorage('familyapp.name');
+const initialStoredTheme = readStorage('familyapp.theme') || 'dark';
 
 const state = {
   route: window.location.hash.replace(/^#/, '') || '/',
@@ -63,6 +64,7 @@ const state = {
   profilePasswordDraft: '',
   profileStatus: '',
   collectionMenuOpen: false,
+  theme: initialStoredTheme === 'light' ? 'light' : 'dark',
 };
 
 const routes = {
@@ -345,30 +347,27 @@ function renderUserIdentity(name) {
   const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
   return `
       ${userPhotoUrl
-        ? `<img class="user-mini-photo" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
-        : `<span class="user-mini-photo user-mini-fallback">${escapeHtml(name.slice(0, 1).toUpperCase())}</span>`}
+        ? `<img class="user-mini-photo nav-avatar" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(name)}" />`
+        : `<span class="user-mini-photo user-mini-fallback nav-avatar">${escapeHtml(name.slice(0, 1).toUpperCase())}</span>`}
   `;
 }
 
 function pageTemplate(content) {
+  const logoActive = state.route === '/' ? 'active' : '';
   return `
     <div class="app-shell">
       <header class="topbar">
-        <a class="brand-panel" href="#/">
-          <span class="brand">FamilyApp</span>
-        </a>
         ${isSignedIn()
           ? `
             <div class="topbar-main">
               <nav class="topbar-nav">
                 <ul class="nav-list">
-                  <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes">Dishes</a></li>
-                  <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies">Movies</a></li>
+                  <li><a class="${logoActive}" href="#/" aria-label="Home" title="Home">🏡</a></li>
+                  <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes" aria-label="Dishes" title="Dishes">🍽️</a></li>
+                  <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies" aria-label="Movies" title="Movies">🎬</a></li>
+                  <li><a class="${state.route === '/profile' ? 'active' : ''} nav-avatar-link" href="#/profile" aria-label="Profile" title="Profile">${renderUserIdentity(state.name || 'User')}</a></li>
                 </ul>
               </nav>
-              <div class="topbar-actions">
-                <button class="user-pill" type="button" data-edit-user-photo="true">${renderUserIdentity(state.name || 'User')}</button>
-              </div>
             </div>`
           : '<span class="muted">Sign in to browse your family lists.</span>'}
       </header>
@@ -384,7 +383,7 @@ function renderHome() {
     return pageTemplate(`
       <section class="panel auth-layout auth-layout-single">
         <div class="welcome-media">
-          <div class="home-top-grid">
+          <div class="home-top-grid home-top-grid-single">
             <div class="profile-card profile-card-large equal-card">
               ${userPhotoUrl
                 ? `<img class="profile-photo profile-photo-large" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
@@ -393,13 +392,6 @@ function renderHome() {
                 <strong>${escapeHtml(state.name || 'User')}</strong>
               </div>
             </div>
-            <section class="auth-card equal-card">
-              <h2>Quick actions</h2>
-              <div class="stack">
-                <button class="button primary" type="button" data-go-route="/dishes">Open dishes</button>
-                <button class="button ghost" type="button" data-go-route="/movies">Open movies</button>
-              </div>
-            </section>
           </div>
           ${helloVideoUrl
             ? `<video class="hello-video" src="${escapeAttribute(helloVideoUrl)}" controls autoplay muted loop playsinline>
@@ -542,6 +534,7 @@ function renderProfilePage() {
               </label>`}
           ${state.profileStatus ? `<p class="message ${state.profileStatus.startsWith('Unable') ? 'error' : 'success'}">${escapeHtml(state.profileStatus)}</p>` : ''}
           <div class="row-actions">
+            <button class="button secondary" type="button" data-theme-toggle="true">${state.theme === 'light' ? '🌙 Dark mode' : '☀️ Light mode'}</button>
             <button class="button primary" type="submit">Save profile</button>
             <button class="button danger" type="button" data-action="logout">Logout</button>
             <button class="button ghost" type="button" data-go-route="/">Back home</button>
@@ -560,15 +553,18 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
   const items = currentSectionItems(kind);
   return pageTemplate(`
     <section class="panel collection-layout">
-      <button class="button ghost side-menu-toggle" type="button" data-toggle-side-menu="true" aria-expanded="${state.collectionMenuOpen ? 'true' : 'false'}">
-        ${state.collectionMenuOpen ? 'Hide filters' : 'Show filters'}
-      </button>
+      <div class="mobile-filter-bar">
+        <button class="mobile-filter-link ${view === 'all' ? 'active' : ''}" type="button" data-view-kind="${kind}" data-view="all">ALL</button>
+        <button class="mobile-filter-link ${view === 'mine' ? 'active' : ''}" type="button" data-view-kind="${kind}" data-view="mine">MINE</button>
+        <button class="mobile-filter-link ${view === 'random' ? 'active' : ''}" type="button" data-view-kind="${kind}" data-view="random">PROP</button>
+        <button class="button primary add-item-button mobile-add-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
+      </div>
 
       <aside class="side-menu ${state.collectionMenuOpen ? 'open' : ''}">
         <h2>${badge}</h2>
-        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All</button>
-        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only mine</button>
-        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Proposition</button>
+        <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">ALL</button>
+        <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">MINE</button>
+        <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">PROP</button>
       </aside>
 
       <div class="content-panel route-transition">
@@ -576,7 +572,7 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
           <div>
             <h3>${view === 'all' ? `All ${title.toLowerCase()}` : view === 'mine' ? `My ${title.toLowerCase()}` : `Random ${title.toLowerCase().slice(0, -1)}`}</h3>
           </div>
-          <button class="button primary add-item-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
+          <button class="button primary add-item-button desktop-add-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
         </div>
 
         ${showForm ? `
@@ -707,6 +703,7 @@ function renderMoviesPage() {
 }
 
 function render() {
+  applyTheme();
   ensureProtectedRoute();
   const view = routes[state.route] || renderHome;
   app.innerHTML = view();
@@ -779,6 +776,14 @@ function render() {
   document.querySelectorAll('[data-toggle-side-menu]').forEach((button) => {
     button.addEventListener('click', () => {
       state.collectionMenuOpen = !state.collectionMenuOpen;
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.theme = state.theme === 'light' ? 'dark' : 'light';
+      writeStorage('familyapp.theme', state.theme);
       render();
     });
   });
@@ -1159,6 +1164,10 @@ function escapeHtml(text) {
 
 function escapeAttribute(text) {
   return escapeHtml(text).replace(/\'/g, '&#39;').replace(/\\/g, '&#92;').replace(/\`/g, '&#96;');
+}
+
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', state.theme);
 }
 
 // Ensure data is loaded on page load if signed in
