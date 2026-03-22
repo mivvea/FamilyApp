@@ -348,18 +348,22 @@ function pageTemplate(content) {
   return `
     <div class="app-shell">
       <header class="topbar">
-        <a class="brand" href="#/">FamilyApp</a>
+        <a class="brand-panel" href="#/">
+          <span class="brand">FamilyApp</span>
+        </a>
         ${isSignedIn()
           ? `
-            <nav>
-              <ul class="nav-list">
-                <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes">Dishes</a></li>
-                <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies">Movies</a></li>
-              </ul>
-            </nav>
-            <div class="topbar-actions">
-              <button class="user-pill" type="button" data-edit-user-photo="true">${renderUserIdentity(state.name || 'User')}</button>
-              <button class="button ghost" data-action="logout">Logout</button>
+            <div class="topbar-main">
+              <nav class="topbar-nav">
+                <ul class="nav-list">
+                  <li><a class="${state.route === '/dishes' ? 'active' : ''}" href="#/dishes">Dishes</a></li>
+                  <li><a class="${state.route === '/movies' ? 'active' : ''}" href="#/movies">Movies</a></li>
+                </ul>
+              </nav>
+              <div class="topbar-actions">
+                <button class="user-pill" type="button" data-edit-user-photo="true">${renderUserIdentity(state.name || 'User')}</button>
+                <button class="button ghost topbar-logout" data-action="logout">Logout</button>
+              </div>
             </div>`
           : '<span class="muted">Sign in to browse your family lists.</span>'}
       </header>
@@ -557,8 +561,7 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
   return pageTemplate(`
     <section class="panel collection-layout">
       <aside class="side-menu">
-        <span class="badge">${badge}</span>
-        <h2>${title}</h2>
+        <h2>${badge}</h2>
         <button class="side-link ${view === 'all' ? 'active' : ''}" data-view-kind="${kind}" data-view="all">All</button>
         <button class="side-link ${view === 'mine' ? 'active' : ''}" data-view-kind="${kind}" data-view="mine">Only mine</button>
         <button class="side-link ${view === 'random' ? 'active' : ''}" data-view-kind="${kind}" data-view="random">Proposition</button>
@@ -569,7 +572,7 @@ function renderCollectionPage({ kind, title, badge, status, itemField, imageFiel
           <div>
             <h3>${view === 'all' ? `All ${title.toLowerCase()}` : view === 'mine' ? `My ${title.toLowerCase()}` : `Random ${title.toLowerCase().slice(0, -1)}`}</h3>
           </div>
-          <button class="icon-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+</button>
+          <button class="button primary add-item-button" type="button" data-toggle-form="${kind}" aria-label="Add ${title.toLowerCase().slice(0, -1)}">+ Add new ${title.toLowerCase().slice(0, -1)}</button>
         </div>
 
         ${showForm ? `
