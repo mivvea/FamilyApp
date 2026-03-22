@@ -53,6 +53,9 @@ export class DataMapper {
     const AddedByPhoto = this.extractPathValue(
       payload.AddedByPhoto ?? payload.addedByPhoto ?? payload.UserPhoto ?? payload.userPhoto ?? payload.ProfilePhoto,
     );
+    const DateStart = this.pickFirstString(payload, ['DateStart', 'dateStart', 'StartDate', 'startDate']);
+    const DateEnd = this.pickFirstString(payload, ['DateEnd', 'dateEnd', 'EndDate', 'endDate']);
+    const Type = this.pickFirstString(payload, ['Type', 'type', 'ItemType', 'itemType']);
 
     return {
       ...payload,
@@ -62,6 +65,9 @@ export class DataMapper {
       AddedBy,
       AddedById,
       AddedByPhoto,
+      DateStart,
+      DateEnd,
+      Type,
     };
   }
 
