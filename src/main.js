@@ -65,6 +65,7 @@ const state = {
   movieDraft: { name: '', photo: '' },
   editorContext: null,
   profileEditorMode: 'link',
+  profilePhotoPreviewUrl: '',
   profilePasswordDraft: '',
   profileStatus: '',
   collectionMenuOpen: false,
@@ -221,6 +222,7 @@ async function hydrateWelcomeMedia() {
     state.userColorByName = new Map();
     state.userColorById = new Map();
     state.userPhotoUrl = '';
+    setProfilePhotoPreviewUrl('');
     state.userColor = '';
     return;
   }
@@ -415,6 +417,63 @@ function getItemCardStyle(item) {
   return ` style="${escapeAttribute(styles.join(';'))};"`;
 }
 
+function getProfileSurfaceStyle() {
+  const styles = [];
+  if (state.userBackground) {
+    styles.push(`--profile-surface-background:${state.userBackground}`);
+  }
+  if (state.userColor) {
+    styles.push(`color:${state.userColor}`);
+  }
+  if (!styles.length) {
+    return '';
+  }
+  return `${styles.join(';')};`;
+}
+
+function getProfilePhotoPreview() {
+  return resolveMediaUrl(state.profilePhotoPreviewUrl || state.userPhotoUrl);
+}
+
+function setProfilePhotoPreviewUrl(nextUrl) {
+  const previous = state.profilePhotoPreviewUrl;
+  if (previous && previous.startsWith('blob:') && previous !== nextUrl) {
+    URL.revokeObjectURL(previous);
+  }
+  state.profilePhotoPreviewUrl = nextUrl;
+}
+
+function updateProfilePreviewElements() {
+  const surfaceStyle = getProfileSurfaceStyle();
+  const surfaceTextStyle = state.userColor ? `color:${state.userColor};` : '';
+  const surfaceNodes = document.querySelectorAll('[data-profile-surface]');
+  surfaceNodes.forEach((node) => {
+    const element = node;
+    if (surfaceStyle) {
+      element.setAttribute('style', surfaceStyle);
+    } else {
+      element.removeAttribute('style');
+    }
+  });
+
+  const textNodes = document.querySelectorAll('[data-profile-text]');
+  textNodes.forEach((node) => {
+    if (surfaceTextStyle) {
+      node.setAttribute('style', surfaceTextStyle);
+    } else {
+      node.removeAttribute('style');
+    }
+  });
+
+  const profilePreviewButton = document.querySelector('[data-profile-photo-preview]');
+  if (profilePreviewButton) {
+    const photoPreview = getProfilePhotoPreview();
+    profilePreviewButton.innerHTML = photoPreview
+      ? `<img class="media-thumb" src="${escapeAttribute(photoPreview)}" alt="${escapeAttribute(state.name || 'Profile photo')}" />`
+      : '<div class="media-thumb placeholder-thumb">No image</div>';
+  }
+}
+
 function renderUserIdentity(name) {
   const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
   return `
@@ -450,19 +509,19 @@ function pageTemplate(content) {
 
 function renderHome() {
   if (isSignedIn()) {
-    const userPhotoUrl = resolveMediaUrl(state.userPhotoUrl);
+    const userPhotoUrl = getProfilePhotoPreview();
     const helloVideoUrl = resolveProtectedEndpointUrl('__hello_video__', `${API_BASE_URL}${endpoints.helloVideo}`);
-    const profileBackgroundStyle = state.userBackground ? `style="background:${escapeAttribute(state.userBackground)};"` : '';
+    const profileSurfaceStyle = getProfileSurfaceStyle();
     const profileTextStyle = state.userColor ? `style="color:${escapeAttribute(state.userColor)};"` : '';
     return pageTemplate(`
       <section class="panel auth-layout auth-layout-single">
         <div class="welcome-media">
           <div class="home-top-grid home-top-grid-single">
-            <div class="profile-card profile-card-large equal-card user-profile-surface" ${profileBackgroundStyle}>
+            <div class="profile-card profile-card-large equal-card user-profile-surface" data-profile-surface ${profileSurfaceStyle ? `style="${escapeAttribute(profileSurfaceStyle)}"` : ''}>
               ${userPhotoUrl
                 ? `<img class="profile-photo profile-photo-large" src="${escapeAttribute(userPhotoUrl)}" alt="${escapeAttribute(state.name || 'Logged user')}" />`
                 : `<div class="profile-photo profile-photo-large profile-fallback">${escapeHtml((state.name || 'U').slice(0, 1).toUpperCase())}</div>`}
-              <div ${profileTextStyle}>
+              <div data-profile-text ${profileTextStyle}>
                 <strong>${escapeHtml(state.name || 'User')}</strong>
               </div>
             </div>
@@ -574,14 +633,14 @@ function renderEditorPage() {
 }
 
 function renderProfilePage() {
-  const photoPreview = resolveMediaUrl(state.userPhotoUrl);
-  const profileBackgroundStyle = state.userBackground ? `style="background:${escapeAttribute(state.userBackground)};"` : '';
+  const photoPreview = getProfilePhotoPreview();
+  const profileSurfaceStyle = getProfileSurfaceStyle();
   const profileTextStyle = state.userColor ? `style="color:${escapeAttribute(state.userColor)};"` : '';
   return pageTemplate(`
     <section class="panel auth-layout">
-      <div class="stack profile-preview user-profile-surface" ${profileBackgroundStyle}>
-        <h1 ${profileTextStyle}>Edit profile</h1>
-        <button class="thumb-shell thumb-button editor-preview" type="button" data-profile-photo-click="true">
+      <div class="stack profile-preview user-profile-surface" data-profile-surface ${profileSurfaceStyle ? `style="${escapeAttribute(profileSurfaceStyle)}"` : ''}>
+        <h1 data-profile-text ${profileTextStyle}>Edit profile</h1>
+        <button class="thumb-shell thumb-button editor-preview" type="button" data-profile-photo-click="true" data-profile-photo-preview>
           ${photoPreview ? `<img class="media-thumb" src="${escapeAttribute(photoPreview)}" alt="${escapeAttribute(state.name || 'Profile photo')}" />` : '<div class="media-thumb placeholder-thumb">No image</div>'}
         </button>
       </div>
@@ -820,6 +879,7 @@ function render() {
       state.showMovieForm = false;
       state.editingDishId = '';
       state.editingMovieId = '';
+      setProfilePhotoPreviewUrl('');
       await refreshProtectedData();
       await hydrateWelcomeMedia();
       navigate('/');
@@ -991,10 +1051,16 @@ function render() {
       const safeColor = sanitizeHexColor(backgroundInput.value);
       if (safeColor) {
         backgroundPickerInput.value = safeColor;
+        state.userBackground = safeColor;
+      } else {
+        state.userBackground = '';
       }
+      updateProfilePreviewElements();
     });
     backgroundPickerInput.addEventListener('input', () => {
       backgroundInput.value = backgroundPickerInput.value;
+      state.userBackground = backgroundPickerInput.value;
+      updateProfilePreviewElements();
     });
   }
 
@@ -1005,10 +1071,34 @@ function render() {
       const safeColor = sanitizeHexColor(colorInput.value);
       if (safeColor) {
         colorPickerInput.value = safeColor;
+        state.userColor = safeColor;
+      } else {
+        state.userColor = '';
       }
+      updateProfilePreviewElements();
     });
     colorPickerInput.addEventListener('input', () => {
       colorInput.value = colorPickerInput.value;
+      state.userColor = colorPickerInput.value;
+      updateProfilePreviewElements();
+    });
+  }
+
+  const profilePhotoLinkInput = document.querySelector('#profile-link-input');
+  if (profilePhotoLinkInput) {
+    profilePhotoLinkInput.addEventListener('input', () => {
+      setProfilePhotoPreviewUrl('');
+      state.userPhotoUrl = profilePhotoLinkInput.value;
+      updateProfilePreviewElements();
+    });
+  }
+
+  const profileFileInput = document.querySelector('#profile-file-input');
+  if (profileFileInput) {
+    profileFileInput.addEventListener('change', () => {
+      const nextFile = profileFileInput.files?.[0];
+      setProfilePhotoPreviewUrl(nextFile ? URL.createObjectURL(nextFile) : '');
+      updateProfilePreviewElements();
     });
   }
 
@@ -1178,6 +1268,7 @@ async function handleProfileFormSubmit(event) {
     state.profileStatus = 'Profile updated.';
     state.name = name;
     state.userPhotoUrl = photoPath;
+    setProfilePhotoPreviewUrl('');
     state.userDarkMode = Number.isFinite(darkMode) ? Math.max(0, Math.min(2, darkMode)) : 0;
     state.userBackground = background;
     state.userColor = color;
