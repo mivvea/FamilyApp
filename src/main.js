@@ -899,11 +899,11 @@ function renderEditorPage() {
           ${isHistoryEditor
             ? `<div class="travel-dates-grid">
                 <label>
-                  Start (UTC)
+                  Start (local time)
                   <input name="dateStart" type="datetime-local" value="${escapeAttribute(dateStartValue)}" />
                 </label>
                 <label>
-                  End (UTC)
+                  End (local time)
                   <input name="dateEnd" type="datetime-local" value="${escapeAttribute(dateEndValue)}" />
                 </label>
               </div>`
@@ -1076,10 +1076,10 @@ function getEditingValue(kind, field) {
     return item?.Photo || '';
   }
   if (normalizedField === 'datestart') {
-    return String(item?.DateStart || '').slice(0, 10);
+    return toDateInputLocalValue(item?.DateStart);
   }
   if (normalizedField === 'dateend') {
-    return String(item?.DateEnd || '').slice(0, 10);
+    return toDateInputLocalValue(item?.DateEnd);
   }
   return '';
 }
@@ -1202,7 +1202,7 @@ function renderHistoryPage() {
         <div class="list-toolbar">
           <div>
             <h3>History calendar</h3>
-            <p class="muted">${escapeHtml(state.historyStatus || 'All picked items are shown by date (UTC).')}</p>
+            <p class="muted">${escapeHtml(state.historyStatus || 'All picked items are shown by your local date/time.')}</p>
           </div>
         </div>
         ${renderHistoryCalendar()}
@@ -1328,9 +1328,14 @@ function renderHistoryCalendar() {
             ? ` data-history-entry-key="${escapeAttribute(historyItem.historyKey)}"`
             : '';
           const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
+          const historyPhoto = resolveMediaUrl(historyItem.entry.Photo || historyItem.entry.photo || '');
+          const photoMarkup = historyPhoto
+            ? `<img class="calendar-item-photo" src="${escapeAttribute(historyPhoto)}" alt="${escapeAttribute(historyItem.title)}" />`
+            : '';
+          const labelMarkup = `<span class="calendar-item-label">${escapeHtml(historyItem.title)}</span>`;
           const content = historyItem.kind
-            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${escapeHtml(historyItem.title)}</button>`
-            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${escapeHtml(historyItem.title)}</span>`;
+            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${photoMarkup}${labelMarkup}</button>`
+            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${photoMarkup}${labelMarkup}</span>`;
 
           columns.push(`<td colspan="${span}" class="calendar-event-slot">${content}</td>`);
           currentColumn = segment.endCol + 1;
@@ -1348,7 +1353,8 @@ function renderHistoryCalendar() {
   const weeks = buildCalendarWeeks();
 
   return `
-    <div class="calendar-toolbar">
+    <div class="history-calendar-wrap">
+      <div class="calendar-toolbar">
       <button class="button secondary" type="button" data-history-nav="-1">←</button>
       <strong>${escapeHtml(monthLabel)}</strong>
       <button class="button secondary" type="button" data-history-nav="1">→</button>
@@ -1378,6 +1384,7 @@ function renderHistoryCalendar() {
         `).join('')}
       </tbody>
     </table>
+    </div>
     <div class="history-day-list-panel">
       ${historyEntries
         .filter((historyItem) => historyItem.startDate.getFullYear() === year && historyItem.startDate.getMonth() === month)
@@ -2055,8 +2062,8 @@ function openEditorPage(kind, itemKey, isPhotoEdit) {
     itemKey,
     primaryDraft: item.Name,
     photoDraft: isPhotoEdit ? null : item.Photo,
-    dateStartDraft: String(item.DateStart || '').slice(0, 10),
-    dateEndDraft: String(item.DateEnd || '').slice(0, 10),
+    dateStartDraft: toDateInputLocalValue(item.DateStart),
+    dateEndDraft: toDateInputLocalValue(item.DateEnd),
     mediaMode: isPhotoEdit ? 'file' : null,
     status: '',
   };
@@ -2070,6 +2077,14 @@ function toDateTimeLocalValue(value) {
   }
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return localDate.toISOString().slice(0, 16);
+}
+
+function toDateInputLocalValue(value) {
+  const date = parseUtcDateTime(value);
+  if (!date) {
+    return '';
+  }
+  return formatLocalDateKey(date);
 }
 
 function openHistoryEditorPage(historyKey) {
