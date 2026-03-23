@@ -91,6 +91,7 @@ const state = {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   })(),
+  historyPreviewKey: '',
   editorContext: null,
   profileEditorMode: 'link',
   profilePhotoPreviewUrl: '',
@@ -496,6 +497,19 @@ function dateDiffInDays(startDate, endDate) {
   }
   const millis = endDate.getTime() - startDate.getTime();
   return Math.max(1, Math.floor(millis / 86400000) + 1);
+}
+
+function formatHistoryDateTime(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    return 'Unknown';
+  }
+  return value.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function areDatesConsecutive(startDate, endDate) {
@@ -1207,7 +1221,54 @@ function renderHistoryPage() {
         ${renderHistoryCalendar()}
       </div>
     </section>
+    ${renderHistoryDetailsModal()}
   `);
+}
+
+function renderHistoryDetailsModal() {
+  if (!state.historyPreviewKey) {
+    return '';
+  }
+
+  const historyItem = buildHistoryEntries().find((entry) => entry.historyKey === state.historyPreviewKey);
+  if (!historyItem) {
+    return '';
+  }
+
+  const itemType = String(historyItem.entry?.Type || historyItem.kind || 'item').trim() || 'item';
+  const addedBy = String(
+    historyItem.entry?.AddedBy
+    || historyItem.entry?.AddedByName
+    || historyItem.entry?.UserName
+    || historyItem.entry?.CreatedBy
+    || ''
+  ).trim() || 'Unknown';
+  const photoUrl = resolveMediaUrl(historyItem.entry?.Photo || '');
+  const historyId = String(historyItem.entry?.id || historyItem.entry?.Id || '').trim();
+
+  return `
+    <div class="history-detail-overlay">
+      <section class="history-detail-modal" role="dialog" aria-modal="true" aria-label="History details">
+        <div class="history-detail-header">
+          <h4>${escapeHtml(historyItem.title)}</h4>
+          <button class="button secondary" type="button" data-history-detail-close>Close</button>
+        </div>
+        ${photoUrl
+          ? `<img class="history-detail-photo" src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(`${historyItem.title} photo`)}" loading="lazy" />`
+          : '<div class="history-detail-photo-placeholder">No photo</div>'}
+        <div class="history-detail-grid">
+          <p><strong>Type:</strong> ${escapeHtml(itemType)}</p>
+          <p><strong>Added by:</strong> ${escapeHtml(addedBy)}</p>
+          <p><strong>Start:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.startAt))}</p>
+          <p><strong>End:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.endAt))}</p>
+        </div>
+        <div class="history-detail-actions">
+          <button class="button secondary" type="button" data-history-detail-edit="${escapeAttribute(historyItem.historyKey)}">Edit</button>
+          <button class="button danger" type="button" data-history-detail-delete="${escapeAttribute(historyId)}">Delete</button>
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function renderHistoryCalendar() {
@@ -1366,7 +1427,7 @@ function renderHistoryCalendar() {
           const span = segment.endCol - segment.startCol + 1;
           const { historyItem } = segment;
           const editAttributes = historyItem.kind
-            ? ` data-history-entry-key="${escapeAttribute(historyItem.historyKey)}"`
+            ? ` data-history-preview-key="${escapeAttribute(historyItem.historyKey)}"`
             : '';
           const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
           const labelMarkup = `<span class="calendar-item-label">${escapeHtml(historyItem.title)}</span>`;
@@ -1619,10 +1680,51 @@ function render() {
     });
   });
 
-  document.querySelectorAll('[data-history-entry-key]').forEach((element) => {
+  document.querySelectorAll('[data-history-preview-key]').forEach((element) => {
     element.addEventListener('click', () => {
-      const groupKey = element.getAttribute('data-history-entry-key') || '';
-      openHistoryEditorPage(groupKey);
+      state.historyPreviewKey = element.getAttribute('data-history-preview-key') || '';
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-history-detail-close]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.historyPreviewKey = '';
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-history-detail-edit]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const historyKey = button.getAttribute('data-history-detail-edit') || '';
+      state.historyPreviewKey = '';
+      openHistoryEditorPage(historyKey);
+    });
+  });
+
+  document.querySelectorAll('[data-history-detail-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const historyId = button.getAttribute('data-history-detail-delete') || '';
+      if (!historyId) {
+        state.apiStatus = 'Unable to delete history event. Missing history id.';
+        render();
+        return;
+      }
+
+      if (!window.confirm('Delete this history event?')) {
+        return;
+      }
+
+      try {
+        await apiRequest(`${endpoints.history}/${historyId}`, { method: 'DELETE' });
+        state.historyPreviewKey = '';
+        state.apiStatus = 'History event deleted.';
+        await refreshProtectedData();
+        render();
+      } catch (error) {
+        state.apiStatus = `Unable to delete history event. ${error.message}`;
+        render();
+      }
     });
   });
 
