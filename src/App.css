@@ -971,6 +971,20 @@ code {
     padding: 8px 12px;
     border-radius: 12px;
   }
+
+  .history-calendar-table {
+    min-width: 760px;
+    border-spacing: 6px 8px;
+  }
+
+  .calendar-day {
+    padding: 8px;
+  }
+
+  .calendar-day-number-row .calendar-day {
+    min-width: 104px;
+    height: 52px;
+  }
 }
 
 
