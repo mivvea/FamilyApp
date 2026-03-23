@@ -1272,6 +1272,10 @@ function renderHistoryDetailsSection() {
   `;
 }
 
+function renderHistoryDetailsModal() {
+  return renderHistoryDetailsSection();
+}
+
 function renderHistoryCalendar() {
   if (!state.history.length) {
     return '<div class="empty-state">No history yet.</div>';
