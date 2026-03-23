@@ -756,7 +756,7 @@ input::placeholder {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(3, 7, 20, 0.45);
+  background: transparent;
 }
 
 .history-detail-modal {
@@ -765,9 +765,12 @@ input::placeholder {
   overflow-y: auto;
   border-radius: 16px;
   padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: linear-gradient(140deg, rgba(41, 66, 156, 0.35), rgba(96, 138, 255, 0.2));
-  box-shadow: 0 12px 28px rgba(6, 11, 27, 0.25);
+  color: var(--media-row-added-color, #e7efff);
+  border: 1px solid rgba(137, 157, 255, 0.14);
+  background:
+    linear-gradient(130deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02)),
+    linear-gradient(120deg, var(--media-row-added-background, rgba(35, 50, 112, 0.55)), rgba(18, 28, 78, 0.42));
+  box-shadow: none;
 }
 
 .history-detail-header {
