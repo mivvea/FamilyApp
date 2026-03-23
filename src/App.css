@@ -611,7 +611,7 @@ input::placeholder {
 .history-calendar-wrap {
   width: 100%;
   margin: 0 0 18px;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .calendar-toolbar {
@@ -638,7 +638,7 @@ input::placeholder {
 
 .history-calendar-table {
   width: 100%;
-  min-width: 980px;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 8px 10px;
   margin-bottom: 0;
@@ -700,6 +700,7 @@ input::placeholder {
 }
 
 .calendar-item-chip {
+  position: relative;
   width: 100%;
   border: 1px solid color-mix(in srgb, var(--item-color, #94a3b8) 60%, transparent);
   background: color-mix(in srgb, var(--item-color, #94a3b8) 22%, transparent);
@@ -710,7 +711,7 @@ input::placeholder {
   font-size: 0.86rem;
   line-height: 1.25;
   display: block;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .calendar-item-span-chip {
@@ -748,25 +749,64 @@ input::placeholder {
   filter: brightness(1.08);
 }
 
-.history-day-list-panel {
-  display: grid;
-  gap: 12px;
+.history-detail-section {
+  margin-top: 14px;
+  width: 100%;
+  max-width: 560px;
+  border-radius: 16px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(140deg, rgba(41, 66, 156, 0.35), rgba(96, 138, 255, 0.2));
+  box-shadow: 0 12px 28px rgba(6, 11, 27, 0.25);
 }
 
-.history-day {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.04);
+.history-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
-.history-day-list {
+.history-detail-header h4 {
   margin: 0;
-  padding-left: 18px;
 }
 
-.history-day-list [data-history-entry-key] {
-  cursor: pointer;
+.history-detail-photo,
+.history-detail-photo-placeholder {
+  width: 100%;
+  min-height: 150px;
+  max-height: 220px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.history-detail-photo {
+  object-fit: cover;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.history-detail-photo-placeholder {
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.18);
+  color: #e6eeff;
+}
+
+.history-detail-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.history-detail-grid p {
+  margin: 0;
+}
+
+.history-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .empty-state {
@@ -973,17 +1013,27 @@ code {
   }
 
   .history-calendar-table {
-    min-width: 760px;
-    border-spacing: 6px 8px;
+    min-width: 100%;
+    border-spacing: 4px 6px;
   }
 
   .calendar-day {
-    padding: 8px;
+    padding: 6px;
   }
 
   .calendar-day-number-row .calendar-day {
-    min-width: 104px;
-    height: 52px;
+    min-width: 0;
+    height: 42px;
+  }
+
+  .calendar-weekday {
+    font-size: 0.75rem;
+    padding-bottom: 3px;
+  }
+
+  .calendar-item-chip {
+    font-size: 0.75rem;
+    padding: 3px 4px;
   }
 }
 
