@@ -765,8 +765,11 @@ input::placeholder {
   overflow-y: auto;
   border-radius: 16px;
   padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: linear-gradient(140deg, color-mix(in srgb, var(--profile-surface-background, #243253) 88%, #0b1225 12%), color-mix(in srgb, var(--profile-surface-background, #243253) 84%, #172750 16%));
+  color: var(--media-row-added-color, #e7efff);
+  border: 1px solid rgba(137, 157, 255, 0.14);
+  background:
+    linear-gradient(130deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02)),
+    linear-gradient(120deg, var(--media-row-added-background, rgba(35, 50, 112, 0.55)), rgba(18, 28, 78, 0.42));
   box-shadow: none;
 }
 

@@ -666,11 +666,11 @@ function getHistorySurfaceStyle(historyEntry) {
   const styles = [];
   if (background) {
     styles.push(`--profile-surface-background:${background}`);
-    styles.push(`--item-color:${background}`);
+    styles.push(`--media-row-added-background:${background}`);
   }
   if (color) {
     styles.push(`color:${color}`);
-    styles.push(`--item-text-color:${color}`);
+    styles.push(`--media-row-added-color:${color}`);
   }
   return styles.join(';');
 }
@@ -1262,7 +1262,8 @@ function renderHistoryDetailsModal() {
   const photoUrl = resolveMediaUrl(historyItem.entry?.Photo || '');
   const historyId = String(historyItem.entry?.id || historyItem.entry?.Id || '').trim();
   const historySurfaceStyle = getHistorySurfaceStyle(historyItem);
-  const textStyle = historySurfaceStyle ? ` style="${escapeAttribute(historySurfaceStyle)};"` : '';
+  const addedByColor = getAddedByColor(historyItem.entry);
+  const textStyle = addedByColor ? ` style="color:${escapeAttribute(addedByColor)};"` : '';
 
   return `
     <div class="history-detail-overlay">
@@ -1453,13 +1454,7 @@ function renderHistoryCalendar() {
             : '';
           const labelMarkup = `<span class="calendar-item-label">${escapeHtml(historyItem.title)}</span>`;
           const tooltipMarkup = renderHistoryTooltip(historyItem);
-          const itemSurfaceStyle = getHistorySurfaceStyle(historyItem);
-          const fallbackColor = colors[historyItem.kind] || '#94a3b8';
-          const styleTokens = [`--item-color:${fallbackColor}`];
-          if (itemSurfaceStyle) {
-            styleTokens.push(itemSurfaceStyle);
-          }
-          const styleAttribute = ` style="${escapeAttribute(styleTokens.join(';'))};"`;
+          const styleAttribute = ` style="--item-color:${colors[historyItem.kind] || '#94a3b8'};"`;
           const content = historyItem.kind
             ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes}${styleAttribute}>${labelMarkup}</button>`
             : `<span class="calendar-item-chip calendar-item-span-chip static"${styleAttribute}>${labelMarkup}</span>`;
