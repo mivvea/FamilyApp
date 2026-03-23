@@ -702,9 +702,9 @@ input::placeholder {
 .calendar-item-chip {
   position: relative;
   width: 100%;
-  border: 1px solid color-mix(in srgb, var(--item-color, #94a3b8) 60%, transparent);
-  background: color-mix(in srgb, var(--item-color, #94a3b8) 22%, transparent);
-  color: #eef4ff;
+  border: 1px solid color-mix(in srgb, var(--item-color, #94a3b8) 72%, #0d152b 28%);
+  background: color-mix(in srgb, var(--item-color, #94a3b8) 82%, #0d152b 18%);
+  color: var(--item-text-color, #eef4ff);
   border-radius: 8px;
   padding: 4px 6px;
   text-align: left;
