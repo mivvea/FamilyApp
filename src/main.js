@@ -660,6 +660,21 @@ function getAddedByColor(item) {
   return sanitizeHexColor(item?.AddedByColor || byId || byName || '');
 }
 
+function getHistorySurfaceStyle(historyEntry) {
+  const background = getAddedByBackground(historyEntry?.entry || historyEntry);
+  const color = getAddedByColor(historyEntry?.entry || historyEntry);
+  const styles = [];
+  if (background) {
+    styles.push(`--profile-surface-background:${background}`);
+    styles.push(`--item-color:${background}`);
+  }
+  if (color) {
+    styles.push(`color:${color}`);
+    styles.push(`--item-text-color:${color}`);
+  }
+  return styles.join(';');
+}
+
 function getItemCardStyle(item) {
   const background = getAddedByBackground(item);
   const color = getAddedByColor(item);
@@ -1246,12 +1261,12 @@ function renderHistoryDetailsModal() {
   ).trim() || 'Unknown';
   const photoUrl = resolveMediaUrl(historyItem.entry?.Photo || '');
   const historyId = String(historyItem.entry?.id || historyItem.entry?.Id || '').trim();
-  const surfaceStyle = getProfileSurfaceStyle();
-  const textStyle = state.userColor ? ` style="color:${escapeAttribute(state.userColor)};"` : '';
+  const historySurfaceStyle = getHistorySurfaceStyle(historyItem);
+  const textStyle = historySurfaceStyle ? ` style="${escapeAttribute(historySurfaceStyle)};"` : '';
 
   return `
     <div class="history-detail-overlay">
-      <section class="history-detail-modal user-profile-surface" data-profile-surface ${surfaceStyle ? `style="${escapeAttribute(surfaceStyle)}"` : ''}>
+      <section class="history-detail-modal user-profile-surface" data-profile-surface ${historySurfaceStyle ? `style="${escapeAttribute(historySurfaceStyle)}"` : ''}>
         <div class="history-detail-header">
           <h4${textStyle}>${escapeHtml(historyItem.title)}</h4>
           <button class="button secondary" type="button" data-history-detail-close>Close</button>
@@ -1438,9 +1453,16 @@ function renderHistoryCalendar() {
             : '';
           const labelMarkup = `<span class="calendar-item-label">${escapeHtml(historyItem.title)}</span>`;
           const tooltipMarkup = renderHistoryTooltip(historyItem);
+          const itemSurfaceStyle = getHistorySurfaceStyle(historyItem);
+          const fallbackColor = colors[historyItem.kind] || '#94a3b8';
+          const styleTokens = [`--item-color:${fallbackColor}`];
+          if (itemSurfaceStyle) {
+            styleTokens.push(itemSurfaceStyle);
+          }
+          const styleAttribute = ` style="${escapeAttribute(styleTokens.join(';'))};"`;
           const content = historyItem.kind
-            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};">${labelMarkup}</button>`
-            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};">${labelMarkup}</span>`;
+            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes}${styleAttribute}>${labelMarkup}</button>`
+            : `<span class="calendar-item-chip calendar-item-span-chip static"${styleAttribute}>${labelMarkup}</span>`;
 
           columns.push(`<td colspan="${span}" class="calendar-event-slot">${content}</td>`);
           currentColumn = segment.endCol + 1;
