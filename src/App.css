@@ -709,9 +709,7 @@ input::placeholder {
   text-align: left;
   font-size: 0.86rem;
   line-height: 1.25;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: block;
   overflow: hidden;
 }
 
@@ -719,15 +717,15 @@ input::placeholder {
   margin-top: 2px;
 }
 
-.calendar-item-photo {
-  width: 20px;
-  min-width: 20px;
-  max-width: 20px;
-  height: 20px;
-  min-height: 20px;
-  max-height: 20px;
-  border-radius: 999px;
-  object-fit: cover;
+.calendar-item-label {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-item-chip.static {
   display: block;
   flex: 0 0 auto;
   border: 1px solid rgba(255, 255, 255, 0.25);

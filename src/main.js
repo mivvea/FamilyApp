@@ -1197,7 +1197,7 @@ function renderTravelPage() {
 
 function renderHistoryPage() {
   return pageTemplate(`
-    <section class="panel collection-layout">
+    <section class="panel">
       <div class="content-panel route-transition">
         <div class="list-toolbar">
           <div>
@@ -1328,14 +1328,10 @@ function renderHistoryCalendar() {
             ? ` data-history-entry-key="${escapeAttribute(historyItem.historyKey)}"`
             : '';
           const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
-          const historyPhoto = resolveMediaUrl(historyItem.entry.Photo || historyItem.entry.photo || '');
-          const photoMarkup = historyPhoto
-            ? `<img class="calendar-item-photo" src="${escapeAttribute(historyPhoto)}" alt="${escapeAttribute(historyItem.title)}" />`
-            : '';
           const labelMarkup = `<span class="calendar-item-label">${escapeHtml(historyItem.title)}</span>`;
           const content = historyItem.kind
-            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${photoMarkup}${labelMarkup}</button>`
-            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${photoMarkup}${labelMarkup}</span>`;
+            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}</button>`
+            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}</span>`;
 
           columns.push(`<td colspan="${span}" class="calendar-event-slot">${content}</td>`);
           currentColumn = segment.endCol + 1;
