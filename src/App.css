@@ -608,6 +608,12 @@ input::placeholder {
   gap: 10px;
 }
 
+.history-calendar-wrap {
+  width: min(100%, 1120px);
+  margin: 0 auto 18px;
+  overflow-x: auto;
+}
+
 .calendar-toolbar {
   display: flex;
   align-items: center;
@@ -632,9 +638,10 @@ input::placeholder {
 
 .history-calendar-table {
   width: 100%;
+  min-width: 980px;
   border-collapse: separate;
   border-spacing: 8px 10px;
-  margin-bottom: 18px;
+  margin-bottom: 0;
   table-layout: fixed;
 }
 
@@ -661,7 +668,8 @@ input::placeholder {
 }
 
 .calendar-day-number-row .calendar-day {
-  height: 54px;
+  height: 58px;
+  min-width: 128px;
 }
 
 .calendar-day-number {
@@ -701,13 +709,20 @@ input::placeholder {
   text-align: left;
   font-size: 0.86rem;
   line-height: 1.25;
-  white-space: nowrap;
+  display: block;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .calendar-item-span-chip {
   margin-top: 2px;
+}
+
+.calendar-item-label {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .calendar-item-chip.static {
