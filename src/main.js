@@ -91,6 +91,7 @@ const state = {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   })(),
+  historyPreviewKey: '',
   editorContext: null,
   profileEditorMode: 'link',
   profilePhotoPreviewUrl: '',
@@ -498,6 +499,19 @@ function dateDiffInDays(startDate, endDate) {
   return Math.max(1, Math.floor(millis / 86400000) + 1);
 }
 
+function formatHistoryDateTime(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    return 'Unknown';
+  }
+  return value.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function areDatesConsecutive(startDate, endDate) {
   if (!startDate || !endDate) {
     return false;
@@ -780,7 +794,6 @@ function renderHome() {
               <div data-profile-text ${profileTextStyle}>
                 <strong>${escapeHtml(state.name || 'User')}</strong>
               </div>
-              <button class="button secondary" type="button" data-go-route="/history">Open history calendar</button>
             </div>
           </div>
           ${helloVideoUrl
@@ -1206,9 +1219,60 @@ function renderHistoryPage() {
           </div>
         </div>
         ${renderHistoryCalendar()}
+        ${renderHistoryDetailsSection()}
       </div>
     </section>
   `);
+}
+
+function renderHistoryDetailsSection() {
+  if (!state.historyPreviewKey) {
+    return '';
+  }
+
+  const historyItem = buildHistoryEntries().find((entry) => entry.historyKey === state.historyPreviewKey);
+  if (!historyItem) {
+    return '';
+  }
+
+  const itemType = String(historyItem.entry?.Type || historyItem.kind || 'item').trim() || 'item';
+  const addedBy = String(
+    historyItem.entry?.AddedBy
+    || historyItem.entry?.AddedByName
+    || historyItem.entry?.UserName
+    || historyItem.entry?.CreatedBy
+    || ''
+  ).trim() || 'Unknown';
+  const photoUrl = resolveMediaUrl(historyItem.entry?.Photo || '');
+  const historyId = String(historyItem.entry?.id || historyItem.entry?.Id || '').trim();
+  const surfaceStyle = getProfileSurfaceStyle();
+  const textStyle = state.userColor ? ` style="color:${escapeAttribute(state.userColor)};"` : '';
+
+  return `
+    <section class="history-detail-section user-profile-surface" data-profile-surface ${surfaceStyle ? `style="${escapeAttribute(surfaceStyle)}"` : ''}>
+      <div class="history-detail-header">
+        <h4${textStyle}>${escapeHtml(historyItem.title)}</h4>
+        <button class="button secondary" type="button" data-history-detail-close>Close</button>
+      </div>
+      ${photoUrl
+        ? `<img class="history-detail-photo" src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(`${historyItem.title} photo`)}" loading="lazy" />`
+        : '<div class="history-detail-photo-placeholder">No photo</div>'}
+      <div class="history-detail-grid"${textStyle}>
+        <p><strong>Type:</strong> ${escapeHtml(itemType)}</p>
+        <p><strong>Added by:</strong> ${escapeHtml(addedBy)}</p>
+        <p><strong>Start:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.startAt))}</p>
+        <p><strong>End:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.endAt))}</p>
+      </div>
+      <div class="history-detail-actions">
+        <button class="button secondary" type="button" data-history-detail-edit="${escapeAttribute(historyItem.historyKey)}">Edit</button>
+        <button class="button danger" type="button" data-history-detail-delete="${escapeAttribute(historyId)}">Delete</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderHistoryDetailsModal() {
+  return renderHistoryDetailsSection();
 }
 
 function renderHistoryCalendar() {
@@ -1223,17 +1287,20 @@ function renderHistoryCalendar() {
   const month = cursor.getMonth();
   const monthStart = new Date(year, month, 1);
   const monthLabel = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  const firstDayOfWeek = monthStart.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const getWeekdayIndex = (dateValue) => (dateValue.getDay() + 6) % 7;
+  const firstDayOfWeek = getWeekdayIndex(monthStart);
+  const monthEnd = new Date(year, month, daysInMonth);
+  const trailingDaysCount = 6 - getWeekdayIndex(monthEnd);
+  const calendarStart = new Date(year, month, 1 - firstDayOfWeek);
+  const calendarEnd = new Date(year, month, daysInMonth + trailingDaysCount);
   const cells = [];
-  for (let i = 0; i < firstDayOfWeek; i += 1) {
-    cells.push(null);
-  }
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    cells.push(new Date(year, month, day));
-  }
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
+  for (let dayPointer = new Date(calendarStart); dayPointer <= calendarEnd; dayPointer.setDate(dayPointer.getDate() + 1)) {
+    const date = new Date(dayPointer);
+    cells.push({
+      date,
+      inCurrentMonth: date.getMonth() === month,
+    });
   }
 
   const colors = {
@@ -1245,9 +1312,9 @@ function renderHistoryCalendar() {
   const buildCalendarWeeks = () => {
     const weeks = [];
     for (let i = 0; i < cells.length; i += 7) {
-      const weekDays = cells.slice(i, i + 7);
-      const weekStart = weekDays.find(Boolean);
-      const weekEnd = [...weekDays].reverse().find(Boolean);
+      const weekDays = cells.slice(i, i + 7).map((cell) => ({ ...cell }));
+      const weekStart = weekDays[0]?.date || null;
+      const weekEnd = weekDays[6]?.date || null;
       weeks.push({ weekDays, weekStart, weekEnd });
     }
     return weeks;
@@ -1285,8 +1352,8 @@ function renderHistoryCalendar() {
           return null;
         }
 
-        const startCol = Math.max(0, visibleStartDate.getDay());
-        const endCol = Math.min(6, visibleEndDate.getDay());
+        const startCol = Math.max(0, getWeekdayIndex(visibleStartDate));
+        const endCol = Math.min(6, getWeekdayIndex(visibleEndDate));
         return {
           historyItem,
           startCol,
@@ -1325,7 +1392,7 @@ function renderHistoryCalendar() {
           const span = segment.endCol - segment.startCol + 1;
           const { historyItem } = segment;
           const editAttributes = historyItem.kind
-            ? ` data-history-entry-key="${escapeAttribute(historyItem.historyKey)}"`
+            ? ` data-history-preview-key="${escapeAttribute(historyItem.historyKey)}"`
             : '';
           const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
           const labelMarkup = `<span class="calendar-item-label">${escapeHtml(historyItem.title)}</span>`;
@@ -1363,46 +1430,21 @@ function renderHistoryCalendar() {
     <table class="history-calendar-table">
       <thead>
         <tr>
-          ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => `<th class="calendar-weekday">${weekday}</th>`).join('')}
+          ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((weekday) => `<th class="calendar-weekday">${weekday}</th>`).join('')}
         </tr>
       </thead>
       <tbody>
         ${weeks.map(({ weekDays, weekStart, weekEnd }) => `
           <tr class="calendar-day-number-row">
-            ${weekDays.map((date) => {
-              if (!date) {
-                return '<td class="calendar-day muted-day"></td>';
-              }
-              return `<td class="calendar-day"><div class="calendar-day-number">${date.getDate()}</div></td>`;
+            ${weekDays.map(({ date, inCurrentMonth }) => {
+              const className = inCurrentMonth ? 'calendar-day' : 'calendar-day muted-day';
+              return `<td class="${className}"><div class="calendar-day-number">${date.getDate()}</div></td>`;
             }).join('')}
           </tr>
           ${renderWeekSegments(weekStart, weekEnd)}
         `).join('')}
       </tbody>
     </table>
-    </div>
-    <div class="history-day-list-panel">
-      ${historyEntries
-        .filter((historyItem) => historyItem.startDate.getFullYear() === year && historyItem.startDate.getMonth() === month)
-        .sort((left, right) => {
-          if (left.startKey !== right.startKey) {
-            return left.startKey.localeCompare(right.startKey);
-          }
-          return right.durationDays - left.durationDays;
-        })
-        .map((historyItem) => `
-          <section class="history-day">
-            <h4>${escapeHtml(historyItem.startKey)} → ${escapeHtml(historyItem.endKey)}</h4>
-            <ul class="history-day-list">
-              <li${historyItem.kind ? ` data-history-entry-key="${escapeAttribute(historyItem.historyKey)}"` : ''}>
-                <span>${escapeHtml(historyItem.entry.Type || 'item')}</span> ·
-                <strong>${escapeHtml(historyItem.title)}</strong> ·
-                ${escapeHtml(historyItem.startAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))} - ${escapeHtml(historyItem.endAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))} ·
-                ${historyItem.durationDays} day${historyItem.durationDays === 1 ? '' : 's'}
-              </li>
-            </ul>
-          </section>
-        `).join('')}
     </div>
   `;
 }
@@ -1602,10 +1644,51 @@ function render() {
     });
   });
 
-  document.querySelectorAll('[data-history-entry-key]').forEach((element) => {
+  document.querySelectorAll('[data-history-preview-key]').forEach((element) => {
     element.addEventListener('click', () => {
-      const groupKey = element.getAttribute('data-history-entry-key') || '';
-      openHistoryEditorPage(groupKey);
+      state.historyPreviewKey = element.getAttribute('data-history-preview-key') || '';
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-history-detail-close]').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.historyPreviewKey = '';
+      render();
+    });
+  });
+
+  document.querySelectorAll('[data-history-detail-edit]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const historyKey = button.getAttribute('data-history-detail-edit') || '';
+      state.historyPreviewKey = '';
+      openHistoryEditorPage(historyKey);
+    });
+  });
+
+  document.querySelectorAll('[data-history-detail-delete]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const historyId = button.getAttribute('data-history-detail-delete') || '';
+      if (!historyId) {
+        state.apiStatus = 'Unable to delete history event. Missing history id.';
+        render();
+        return;
+      }
+
+      if (!window.confirm('Delete this history event?')) {
+        return;
+      }
+
+      try {
+        await apiRequest(`${endpoints.history}/${historyId}`, { method: 'DELETE' });
+        state.historyPreviewKey = '';
+        state.apiStatus = 'History event deleted.';
+        await refreshProtectedData();
+        render();
+      } catch (error) {
+        state.apiStatus = `Unable to delete history event. ${error.message}`;
+        render();
+      }
     });
   });
 
