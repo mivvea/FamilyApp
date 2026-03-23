@@ -780,7 +780,6 @@ function renderHome() {
               <div data-profile-text ${profileTextStyle}>
                 <strong>${escapeHtml(state.name || 'User')}</strong>
               </div>
-              <button class="button secondary" type="button" data-go-route="/history">Open history calendar</button>
             </div>
           </div>
           ${helloVideoUrl
@@ -1223,17 +1222,20 @@ function renderHistoryCalendar() {
   const month = cursor.getMonth();
   const monthStart = new Date(year, month, 1);
   const monthLabel = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  const firstDayOfWeek = monthStart.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const getWeekdayIndex = (dateValue) => (dateValue.getDay() + 6) % 7;
+  const firstDayOfWeek = getWeekdayIndex(monthStart);
+  const monthEnd = new Date(year, month, daysInMonth);
+  const trailingDaysCount = 6 - getWeekdayIndex(monthEnd);
+  const calendarStart = new Date(year, month, 1 - firstDayOfWeek);
+  const calendarEnd = new Date(year, month, daysInMonth + trailingDaysCount);
   const cells = [];
-  for (let i = 0; i < firstDayOfWeek; i += 1) {
-    cells.push(null);
-  }
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    cells.push(new Date(year, month, day));
-  }
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
+  for (let dayPointer = new Date(calendarStart); dayPointer <= calendarEnd; dayPointer.setDate(dayPointer.getDate() + 1)) {
+    const date = new Date(dayPointer);
+    cells.push({
+      date,
+      inCurrentMonth: date.getMonth() === month,
+    });
   }
 
   const colors = {
@@ -1242,12 +1244,51 @@ function renderHistoryCalendar() {
     travel: '#06b6d4',
   };
 
+  const formatTooltipDateTime = (value) => {
+    if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+      return 'Unknown';
+    }
+    return value.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const renderHistoryTooltip = (historyItem) => {
+    const itemType = String(historyItem.entry?.Type || historyItem.kind || 'item').trim() || 'item';
+    const addedBy = String(
+      historyItem.entry?.AddedBy
+      || historyItem.entry?.AddedByName
+      || historyItem.entry?.UserName
+      || historyItem.entry?.CreatedBy
+      || ''
+    ).trim() || 'Unknown';
+    const photoUrl = resolveMediaUrl(historyItem.entry?.Photo || '');
+    const photoMarkup = photoUrl
+      ? `<img class="calendar-tooltip-photo" src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(`${historyItem.title} photo`)}" loading="lazy" />`
+      : '<div class="calendar-tooltip-photo placeholder" aria-hidden="true">No photo</div>';
+
+    return `
+      <span class="calendar-item-tooltip" role="tooltip">
+        <strong>${escapeHtml(historyItem.title)}</strong>
+        ${photoMarkup}
+        <span><b>Type:</b> ${escapeHtml(itemType)}</span>
+        <span><b>Added by:</b> ${escapeHtml(addedBy)}</span>
+        <span><b>Start:</b> ${escapeHtml(formatTooltipDateTime(historyItem.startAt))}</span>
+        <span><b>End:</b> ${escapeHtml(formatTooltipDateTime(historyItem.endAt))}</span>
+      </span>
+    `;
+  };
+
   const buildCalendarWeeks = () => {
     const weeks = [];
     for (let i = 0; i < cells.length; i += 7) {
-      const weekDays = cells.slice(i, i + 7);
-      const weekStart = weekDays.find(Boolean);
-      const weekEnd = [...weekDays].reverse().find(Boolean);
+      const weekDays = cells.slice(i, i + 7).map((cell) => ({ ...cell }));
+      const weekStart = weekDays[0]?.date || null;
+      const weekEnd = weekDays[6]?.date || null;
       weeks.push({ weekDays, weekStart, weekEnd });
     }
     return weeks;
@@ -1285,8 +1326,8 @@ function renderHistoryCalendar() {
           return null;
         }
 
-        const startCol = Math.max(0, visibleStartDate.getDay());
-        const endCol = Math.min(6, visibleEndDate.getDay());
+        const startCol = Math.max(0, getWeekdayIndex(visibleStartDate));
+        const endCol = Math.min(6, getWeekdayIndex(visibleEndDate));
         return {
           historyItem,
           startCol,
@@ -1329,9 +1370,10 @@ function renderHistoryCalendar() {
             : '';
           const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
           const labelMarkup = `<span class="calendar-item-label">${escapeHtml(historyItem.title)}</span>`;
+          const tooltipMarkup = renderHistoryTooltip(historyItem);
           const content = historyItem.kind
-            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}</button>`
-            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}</span>`;
+            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}${tooltipMarkup}</button>`
+            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}${tooltipMarkup}</span>`;
 
           columns.push(`<td colspan="${span}" class="calendar-event-slot">${content}</td>`);
           currentColumn = segment.endCol + 1;
@@ -1363,46 +1405,21 @@ function renderHistoryCalendar() {
     <table class="history-calendar-table">
       <thead>
         <tr>
-          ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => `<th class="calendar-weekday">${weekday}</th>`).join('')}
+          ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((weekday) => `<th class="calendar-weekday">${weekday}</th>`).join('')}
         </tr>
       </thead>
       <tbody>
         ${weeks.map(({ weekDays, weekStart, weekEnd }) => `
           <tr class="calendar-day-number-row">
-            ${weekDays.map((date) => {
-              if (!date) {
-                return '<td class="calendar-day muted-day"></td>';
-              }
-              return `<td class="calendar-day"><div class="calendar-day-number">${date.getDate()}</div></td>`;
+            ${weekDays.map(({ date, inCurrentMonth }) => {
+              const className = inCurrentMonth ? 'calendar-day' : 'calendar-day muted-day';
+              return `<td class="${className}"><div class="calendar-day-number">${date.getDate()}</div></td>`;
             }).join('')}
           </tr>
           ${renderWeekSegments(weekStart, weekEnd)}
         `).join('')}
       </tbody>
     </table>
-    </div>
-    <div class="history-day-list-panel">
-      ${historyEntries
-        .filter((historyItem) => historyItem.startDate.getFullYear() === year && historyItem.startDate.getMonth() === month)
-        .sort((left, right) => {
-          if (left.startKey !== right.startKey) {
-            return left.startKey.localeCompare(right.startKey);
-          }
-          return right.durationDays - left.durationDays;
-        })
-        .map((historyItem) => `
-          <section class="history-day">
-            <h4>${escapeHtml(historyItem.startKey)} → ${escapeHtml(historyItem.endKey)}</h4>
-            <ul class="history-day-list">
-              <li${historyItem.kind ? ` data-history-entry-key="${escapeAttribute(historyItem.historyKey)}"` : ''}>
-                <span>${escapeHtml(historyItem.entry.Type || 'item')}</span> ·
-                <strong>${escapeHtml(historyItem.title)}</strong> ·
-                ${escapeHtml(historyItem.startAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))} - ${escapeHtml(historyItem.endAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))} ·
-                ${historyItem.durationDays} day${historyItem.durationDays === 1 ? '' : 's'}
-              </li>
-            </ul>
-          </section>
-        `).join('')}
     </div>
   `;
 }
