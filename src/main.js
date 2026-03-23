@@ -531,14 +531,15 @@ function buildHistoryEntries() {
       const normalizedStartKey = formatLocalDateKey(normalizedStartDate);
       const normalizedEndKey = formatLocalDateKey(normalizedEndDate);
       const title = String(entry.Name || 'Untitled').trim() || 'Untitled';
-      const photo = extractPathValue(entry.Photo || entry.photo);
-      const groupKey = [kind, title.toLowerCase(), photo].join('::');
+      const itemKey = resolveHistoryEntryItemKey(entry, kind);
+      const groupIdentity = itemKey || title.toLowerCase();
+      const groupKey = [kind, groupIdentity].join('::');
 
       return {
         entry,
         groupKey,
         kind,
-        itemKey: resolveHistoryEntryItemKey(entry, kind),
+        itemKey,
         startKey: normalizedStartKey,
         endKey: normalizedEndKey,
         startDate: normalizedStartDate,
@@ -1241,23 +1242,110 @@ function renderHistoryCalendar() {
     travel: '#06b6d4',
   };
 
-  const renderCalendarItems = (entries) => {
-    if (!entries.length) {
-      return '<div class="calendar-day-empty">—</div>';
+  const buildCalendarWeeks = () => {
+    const weeks = [];
+    for (let i = 0; i < cells.length; i += 7) {
+      const weekDays = cells.slice(i, i + 7);
+      const weekStart = weekDays.find(Boolean);
+      const weekEnd = [...weekDays].reverse().find(Boolean);
+      weeks.push({ weekDays, weekStart, weekEnd });
+    }
+    return weeks;
+  };
+
+  const placeSegmentsInLanes = (segments) => {
+    const lanes = [];
+    segments.forEach((segment) => {
+      let laneIndex = lanes.findIndex((lane) => lane.every((existing) => segment.startCol > existing.endCol || segment.endCol < existing.startCol));
+      if (laneIndex < 0) {
+        laneIndex = lanes.length;
+        lanes.push([]);
+      }
+      lanes[laneIndex].push(segment);
+    });
+    return lanes;
+  };
+
+  const renderWeekSegments = (weekStart, weekEnd) => {
+    if (!weekStart || !weekEnd) {
+      return '<tr class="calendar-event-row"><td class="calendar-day-empty-cell" colspan="7">—</td></tr>';
     }
 
-    return entries
+    const weekStartKey = formatLocalDateKey(weekStart);
+    const weekEndKey = formatLocalDateKey(weekEnd);
+
+    const segments = historyEntries
+      .filter((historyItem) => historyItem.endKey >= weekStartKey && historyItem.startKey <= weekEndKey)
       .map((historyItem) => {
-        const editAttributes = historyItem.kind
-          ? ` data-history-entry-key="${escapeAttribute(historyItem.historyKey)}"`
-          : '';
-        const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
-        return historyItem.kind
-          ? `<button class="calendar-item-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${escapeHtml(historyItem.title)}</button>`
-          : `<span class="calendar-item-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${escapeHtml(historyItem.title)}</span>`;
+        const visibleStart = historyItem.startKey < weekStartKey ? weekStartKey : historyItem.startKey;
+        const visibleEnd = historyItem.endKey > weekEndKey ? weekEndKey : historyItem.endKey;
+        const visibleStartDate = dateKeyToLocalDate(visibleStart);
+        const visibleEndDate = dateKeyToLocalDate(visibleEnd);
+        if (!visibleStartDate || !visibleEndDate) {
+          return null;
+        }
+
+        const startCol = Math.max(0, visibleStartDate.getDay());
+        const endCol = Math.min(6, visibleEndDate.getDay());
+        return {
+          historyItem,
+          startCol,
+          endCol,
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => {
+        if (left.startCol !== right.startCol) {
+          return left.startCol - right.startCol;
+        }
+        if (right.historyItem.durationDays !== left.historyItem.durationDays) {
+          return right.historyItem.durationDays - left.historyItem.durationDays;
+        }
+        return left.historyItem.title.localeCompare(right.historyItem.title);
+      });
+
+    if (!segments.length) {
+      return '<tr class="calendar-event-row"><td class="calendar-day-empty-cell" colspan="7">—</td></tr>';
+    }
+
+    const lanes = placeSegmentsInLanes(segments);
+
+    return lanes
+      .map((lane) => {
+        const sortedLane = [...lane].sort((left, right) => left.startCol - right.startCol);
+        let currentColumn = 0;
+        const columns = [];
+
+        sortedLane.forEach((segment) => {
+          const gap = segment.startCol - currentColumn;
+          if (gap > 0) {
+            columns.push(`<td colspan="${gap}" class="calendar-empty-event-slot"></td>`);
+          }
+
+          const span = segment.endCol - segment.startCol + 1;
+          const { historyItem } = segment;
+          const editAttributes = historyItem.kind
+            ? ` data-history-entry-key="${escapeAttribute(historyItem.historyKey)}"`
+            : '';
+          const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
+          const content = historyItem.kind
+            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${escapeHtml(historyItem.title)}</button>`
+            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${escapeHtml(historyItem.title)}</span>`;
+
+          columns.push(`<td colspan="${span}" class="calendar-event-slot">${content}</td>`);
+          currentColumn = segment.endCol + 1;
+        });
+
+        if (currentColumn < 7) {
+          columns.push(`<td colspan="${7 - currentColumn}" class="calendar-empty-event-slot"></td>`);
+        }
+
+        return `<tr class="calendar-event-row">${columns.join('')}</tr>`;
       })
       .join('');
   };
+
+  const weeks = buildCalendarWeeks();
 
   return `
     <div class="calendar-toolbar">
@@ -1270,29 +1358,26 @@ function renderHistoryCalendar() {
       <span><i style="background:#8b5cf6"></i> Movie</span>
       <span><i style="background:#06b6d4"></i> Travel</span>
     </div>
-    <div class="history-calendar-grid">
-      ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => `<div class="calendar-weekday">${weekday}</div>`).join('')}
-      ${cells.map((date) => {
-        if (!date) {
-          return '<div class="calendar-day muted-day"></div>';
-        }
-        const key = formatLocalDateKey(date);
-        const entries = historyEntries
-          .filter((historyItem) => key >= historyItem.startKey && key <= historyItem.endKey)
-          .sort((left, right) => {
-            if (right.durationDays !== left.durationDays) {
-              return right.durationDays - left.durationDays;
-            }
-            return left.title.localeCompare(right.title);
-          });
-        return `
-          <div class="calendar-day">
-            <div class="calendar-day-number">${date.getDate()}</div>
-            <div class="calendar-day-items">${renderCalendarItems(entries)}</div>
-          </div>
-        `;
-      }).join('')}
-    </div>
+    <table class="history-calendar-table">
+      <thead>
+        <tr>
+          ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => `<th class="calendar-weekday">${weekday}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody>
+        ${weeks.map(({ weekDays, weekStart, weekEnd }) => `
+          <tr class="calendar-day-number-row">
+            ${weekDays.map((date) => {
+              if (!date) {
+                return '<td class="calendar-day muted-day"></td>';
+              }
+              return `<td class="calendar-day"><div class="calendar-day-number">${date.getDate()}</div></td>`;
+            }).join('')}
+          </tr>
+          ${renderWeekSegments(weekStart, weekEnd)}
+        `).join('')}
+      </tbody>
+    </table>
     <div class="history-day-list-panel">
       ${historyEntries
         .filter((historyItem) => historyItem.startDate.getFullYear() === year && historyItem.startDate.getMonth() === month)
@@ -1762,11 +1847,11 @@ async function handleEditorFormSubmit(event) {
 
     const body = {
       ...historyEntry.entry,
-      name: primary,
-      photo: photoPath,
-      dateStart: parseLocalDateTimeToIso(dateStart, historyEntry.entry.DateStart || new Date().toISOString()),
-      dateEnd: parseLocalDateTimeToIso(dateEnd, historyEntry.entry.DateEnd || new Date().toISOString()),
-      type: historyEntry.entry.Type || (kind === 'dishes' ? 'dish' : kind === 'movies' ? 'movie' : 'travel'),
+      Name: primary,
+      Photo: photoPath,
+      DateStart: parseLocalDateTimeToIso(dateStart, historyEntry.entry.DateStart || new Date().toISOString()),
+      DateEnd: parseLocalDateTimeToIso(dateEnd, historyEntry.entry.DateEnd || new Date().toISOString()),
+      Type: historyEntry.entry.Type || (kind === 'dishes' ? 'dish' : kind === 'movies' ? 'movie' : 'travel'),
     };
 
     try {
