@@ -1219,13 +1219,14 @@ function renderHistoryPage() {
           </div>
         </div>
         ${renderHistoryCalendar()}
+        ${renderHistoryDetailsSection()}
       </div>
     </section>
     ${renderHistoryDetailsModal()}
   `);
 }
 
-function renderHistoryDetailsModal() {
+function renderHistoryDetailsSection() {
   if (!state.historyPreviewKey) {
     return '';
   }
@@ -1245,29 +1246,29 @@ function renderHistoryDetailsModal() {
   ).trim() || 'Unknown';
   const photoUrl = resolveMediaUrl(historyItem.entry?.Photo || '');
   const historyId = String(historyItem.entry?.id || historyItem.entry?.Id || '').trim();
+  const surfaceStyle = getProfileSurfaceStyle();
+  const textStyle = state.userColor ? ` style="color:${escapeAttribute(state.userColor)};"` : '';
 
   return `
-    <div class="history-detail-overlay">
-      <section class="history-detail-modal" role="dialog" aria-modal="true" aria-label="History details">
-        <div class="history-detail-header">
-          <h4>${escapeHtml(historyItem.title)}</h4>
-          <button class="button secondary" type="button" data-history-detail-close>Close</button>
-        </div>
-        ${photoUrl
-          ? `<img class="history-detail-photo" src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(`${historyItem.title} photo`)}" loading="lazy" />`
-          : '<div class="history-detail-photo-placeholder">No photo</div>'}
-        <div class="history-detail-grid">
-          <p><strong>Type:</strong> ${escapeHtml(itemType)}</p>
-          <p><strong>Added by:</strong> ${escapeHtml(addedBy)}</p>
-          <p><strong>Start:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.startAt))}</p>
-          <p><strong>End:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.endAt))}</p>
-        </div>
-        <div class="history-detail-actions">
-          <button class="button secondary" type="button" data-history-detail-edit="${escapeAttribute(historyItem.historyKey)}">Edit</button>
-          <button class="button danger" type="button" data-history-detail-delete="${escapeAttribute(historyId)}">Delete</button>
-        </div>
-      </section>
-    </div>
+    <section class="history-detail-section user-profile-surface" data-profile-surface ${surfaceStyle ? `style="${escapeAttribute(surfaceStyle)}"` : ''}>
+      <div class="history-detail-header">
+        <h4${textStyle}>${escapeHtml(historyItem.title)}</h4>
+        <button class="button secondary" type="button" data-history-detail-close>Close</button>
+      </div>
+      ${photoUrl
+        ? `<img class="history-detail-photo" src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(`${historyItem.title} photo`)}" loading="lazy" />`
+        : '<div class="history-detail-photo-placeholder">No photo</div>'}
+      <div class="history-detail-grid"${textStyle}>
+        <p><strong>Type:</strong> ${escapeHtml(itemType)}</p>
+        <p><strong>Added by:</strong> ${escapeHtml(addedBy)}</p>
+        <p><strong>Start:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.startAt))}</p>
+        <p><strong>End:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.endAt))}</p>
+      </div>
+      <div class="history-detail-actions">
+        <button class="button secondary" type="button" data-history-detail-edit="${escapeAttribute(historyItem.historyKey)}">Edit</button>
+        <button class="button danger" type="button" data-history-detail-delete="${escapeAttribute(historyId)}">Delete</button>
+      </div>
+    </section>
   `;
 }
 
