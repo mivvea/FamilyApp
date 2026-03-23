@@ -1222,6 +1222,7 @@ function renderHistoryPage() {
         ${renderHistoryDetailsSection()}
       </div>
     </section>
+    ${renderHistoryDetailsModal()}
   `);
 }
 
@@ -1307,6 +1308,45 @@ function renderHistoryCalendar() {
     dishes: '#f59e0b',
     movies: '#8b5cf6',
     travel: '#06b6d4',
+  };
+
+  const formatTooltipDateTime = (value) => {
+    if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+      return 'Unknown';
+    }
+    return value.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const renderHistoryTooltip = (historyItem) => {
+    const itemType = String(historyItem.entry?.Type || historyItem.kind || 'item').trim() || 'item';
+    const addedBy = String(
+      historyItem.entry?.AddedBy
+      || historyItem.entry?.AddedByName
+      || historyItem.entry?.UserName
+      || historyItem.entry?.CreatedBy
+      || ''
+    ).trim() || 'Unknown';
+    const photoUrl = resolveMediaUrl(historyItem.entry?.Photo || '');
+    const photoMarkup = photoUrl
+      ? `<img class="calendar-tooltip-photo" src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(`${historyItem.title} photo`)}" loading="lazy" />`
+      : '<div class="calendar-tooltip-photo placeholder" aria-hidden="true">No photo</div>';
+
+    return `
+      <span class="calendar-item-tooltip" role="tooltip">
+        <strong>${escapeHtml(historyItem.title)}</strong>
+        ${photoMarkup}
+        <span><b>Type:</b> ${escapeHtml(itemType)}</span>
+        <span><b>Added by:</b> ${escapeHtml(addedBy)}</span>
+        <span><b>Start:</b> ${escapeHtml(formatTooltipDateTime(historyItem.startAt))}</span>
+        <span><b>End:</b> ${escapeHtml(formatTooltipDateTime(historyItem.endAt))}</span>
+      </span>
+    `;
   };
 
   const buildCalendarWeeks = () => {
@@ -1396,9 +1436,10 @@ function renderHistoryCalendar() {
             : '';
           const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
           const labelMarkup = `<span class="calendar-item-label">${escapeHtml(historyItem.title)}</span>`;
+          const tooltipMarkup = renderHistoryTooltip(historyItem);
           const content = historyItem.kind
-            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}</button>`
-            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}</span>`;
+            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}${tooltipMarkup}</button>`
+            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}${tooltipMarkup}</span>`;
 
           columns.push(`<td colspan="${span}" class="calendar-event-slot">${content}</td>`);
           currentColumn = segment.endCol + 1;
