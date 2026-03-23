@@ -609,8 +609,8 @@ input::placeholder {
 }
 
 .history-calendar-wrap {
-  width: min(100%, 1120px);
-  margin: 0 auto 18px;
+  width: 100%;
+  margin: 0 0 18px;
   overflow-x: auto;
 }
 
