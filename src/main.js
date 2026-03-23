@@ -1226,7 +1226,7 @@ function renderHistoryPage() {
   `);
 }
 
-function renderHistoryDetailsSection() {
+function renderHistoryDetailsModal() {
   if (!state.historyPreviewKey) {
     return '';
   }
@@ -1250,30 +1250,32 @@ function renderHistoryDetailsSection() {
   const textStyle = state.userColor ? ` style="color:${escapeAttribute(state.userColor)};"` : '';
 
   return `
-    <section class="history-detail-section user-profile-surface" data-profile-surface ${surfaceStyle ? `style="${escapeAttribute(surfaceStyle)}"` : ''}>
-      <div class="history-detail-header">
-        <h4${textStyle}>${escapeHtml(historyItem.title)}</h4>
-        <button class="button secondary" type="button" data-history-detail-close>Close</button>
-      </div>
-      ${photoUrl
-        ? `<img class="history-detail-photo" src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(`${historyItem.title} photo`)}" loading="lazy" />`
-        : '<div class="history-detail-photo-placeholder">No photo</div>'}
-      <div class="history-detail-grid"${textStyle}>
-        <p><strong>Type:</strong> ${escapeHtml(itemType)}</p>
-        <p><strong>Added by:</strong> ${escapeHtml(addedBy)}</p>
-        <p><strong>Start:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.startAt))}</p>
-        <p><strong>End:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.endAt))}</p>
-      </div>
-      <div class="history-detail-actions">
-        <button class="button secondary" type="button" data-history-detail-edit="${escapeAttribute(historyItem.historyKey)}">Edit</button>
-        <button class="button danger" type="button" data-history-detail-delete="${escapeAttribute(historyId)}">Delete</button>
-      </div>
-    </section>
+    <div class="history-detail-overlay">
+      <section class="history-detail-modal user-profile-surface" data-profile-surface ${surfaceStyle ? `style="${escapeAttribute(surfaceStyle)}"` : ''}>
+        <div class="history-detail-header">
+          <h4${textStyle}>${escapeHtml(historyItem.title)}</h4>
+          <button class="button secondary" type="button" data-history-detail-close>Close</button>
+        </div>
+        ${photoUrl
+          ? `<img class="history-detail-photo" src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(`${historyItem.title} photo`)}" loading="lazy" />`
+          : '<div class="history-detail-photo-placeholder">No photo</div>'}
+        <div class="history-detail-grid"${textStyle}>
+          <p><strong>Type:</strong> ${escapeHtml(itemType)}</p>
+          <p><strong>Added by:</strong> ${escapeHtml(addedBy)}</p>
+          <p><strong>Start:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.startAt))}</p>
+          <p><strong>End:</strong> ${escapeHtml(formatHistoryDateTime(historyItem.endAt))}</p>
+        </div>
+        <div class="history-detail-actions">
+          <button class="button secondary" type="button" data-history-detail-edit="${escapeAttribute(historyItem.historyKey)}">Edit</button>
+          <button class="button danger" type="button" data-history-detail-delete="${escapeAttribute(historyId)}">Delete</button>
+        </div>
+      </section>
+    </div>
   `;
 }
 
-function renderHistoryDetailsModal() {
-  return renderHistoryDetailsSection();
+function renderHistoryDetailsSection() {
+  return renderHistoryDetailsModal();
 }
 
 function renderHistoryCalendar() {
@@ -1434,12 +1436,11 @@ function renderHistoryCalendar() {
           const editAttributes = historyItem.kind
             ? ` data-history-preview-key="${escapeAttribute(historyItem.historyKey)}"`
             : '';
-          const title = `${historyItem.title} (${historyItem.startKey} → ${historyItem.endKey})`;
           const labelMarkup = `<span class="calendar-item-label">${escapeHtml(historyItem.title)}</span>`;
           const tooltipMarkup = renderHistoryTooltip(historyItem);
           const content = historyItem.kind
-            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}${tooltipMarkup}</button>`
-            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};" title="${escapeAttribute(title)}">${labelMarkup}${tooltipMarkup}</span>`;
+            ? `<button class="calendar-item-chip calendar-item-span-chip" type="button"${editAttributes} style="--item-color:${colors[historyItem.kind] || '#94a3b8'};">${labelMarkup}</button>`
+            : `<span class="calendar-item-chip calendar-item-span-chip static" style="--item-color:${colors[historyItem.kind] || '#94a3b8'};">${labelMarkup}</span>`;
 
           columns.push(`<td colspan="${span}" class="calendar-event-slot">${content}</td>`);
           currentColumn = segment.endCol + 1;
