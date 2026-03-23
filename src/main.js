@@ -780,7 +780,6 @@ function renderHome() {
               <div data-profile-text ${profileTextStyle}>
                 <strong>${escapeHtml(state.name || 'User')}</strong>
               </div>
-              <button class="button secondary" type="button" data-go-route="/history">Open history calendar</button>
             </div>
           </div>
           ${helloVideoUrl
@@ -1223,17 +1222,20 @@ function renderHistoryCalendar() {
   const month = cursor.getMonth();
   const monthStart = new Date(year, month, 1);
   const monthLabel = monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  const firstDayOfWeek = monthStart.getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const getWeekdayIndex = (dateValue) => (dateValue.getDay() + 6) % 7;
+  const firstDayOfWeek = getWeekdayIndex(monthStart);
+  const monthEnd = new Date(year, month, daysInMonth);
+  const trailingDaysCount = 6 - getWeekdayIndex(monthEnd);
+  const calendarStart = new Date(year, month, 1 - firstDayOfWeek);
+  const calendarEnd = new Date(year, month, daysInMonth + trailingDaysCount);
   const cells = [];
-  for (let i = 0; i < firstDayOfWeek; i += 1) {
-    cells.push(null);
-  }
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    cells.push(new Date(year, month, day));
-  }
-  while (cells.length % 7 !== 0) {
-    cells.push(null);
+  for (let dayPointer = new Date(calendarStart); dayPointer <= calendarEnd; dayPointer.setDate(dayPointer.getDate() + 1)) {
+    const date = new Date(dayPointer);
+    cells.push({
+      date,
+      inCurrentMonth: date.getMonth() === month,
+    });
   }
 
   const colors = {
@@ -1284,9 +1286,9 @@ function renderHistoryCalendar() {
   const buildCalendarWeeks = () => {
     const weeks = [];
     for (let i = 0; i < cells.length; i += 7) {
-      const weekDays = cells.slice(i, i + 7);
-      const weekStart = weekDays.find(Boolean);
-      const weekEnd = [...weekDays].reverse().find(Boolean);
+      const weekDays = cells.slice(i, i + 7).map((cell) => ({ ...cell }));
+      const weekStart = weekDays[0]?.date || null;
+      const weekEnd = weekDays[6]?.date || null;
       weeks.push({ weekDays, weekStart, weekEnd });
     }
     return weeks;
@@ -1324,8 +1326,8 @@ function renderHistoryCalendar() {
           return null;
         }
 
-        const startCol = Math.max(0, visibleStartDate.getDay());
-        const endCol = Math.min(6, visibleEndDate.getDay());
+        const startCol = Math.max(0, getWeekdayIndex(visibleStartDate));
+        const endCol = Math.min(6, getWeekdayIndex(visibleEndDate));
         return {
           historyItem,
           startCol,
@@ -1403,17 +1405,15 @@ function renderHistoryCalendar() {
     <table class="history-calendar-table">
       <thead>
         <tr>
-          ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => `<th class="calendar-weekday">${weekday}</th>`).join('')}
+          ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((weekday) => `<th class="calendar-weekday">${weekday}</th>`).join('')}
         </tr>
       </thead>
       <tbody>
         ${weeks.map(({ weekDays, weekStart, weekEnd }) => `
           <tr class="calendar-day-number-row">
-            ${weekDays.map((date) => {
-              if (!date) {
-                return '<td class="calendar-day muted-day"></td>';
-              }
-              return `<td class="calendar-day"><div class="calendar-day-number">${date.getDate()}</div></td>`;
+            ${weekDays.map(({ date, inCurrentMonth }) => {
+              const className = inCurrentMonth ? 'calendar-day' : 'calendar-day muted-day';
+              return `<td class="${className}"><div class="calendar-day-number">${date.getDate()}</div></td>`;
             }).join('')}
           </tr>
           ${renderWeekSegments(weekStart, weekEnd)}
